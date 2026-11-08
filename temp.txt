@@ -1,0 +1,11 @@
+select
+  timestamp,
+  log_attributes['msg'] as msg,
+  event_message,
+  log_attributes['status'] as status,
+  log_attributes['path'] as path
+from logs
+where source = 'auth_logs'
+  and toInt32OrZero(log_attributes['status']) = 500
+order by timestamp desc
+limit 20;
