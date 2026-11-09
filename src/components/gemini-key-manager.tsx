@@ -42,7 +42,13 @@ export function GeminiKeyManager({
         Your key is encrypted on the server before it is stored. It is never shown again or sent to your browser, and can be removed here. It is checked the next time you use a Gemini feature. Google applies your key’s quota, billing, and data policies to those requests.
       </p>
       {demo && <p role="status" className="mt-3 text-sm text-[#697066]">Personal keys are disabled in demo mode. Use FitLog’s server-configured key there.</p>}
-      {!demo && keyStoreReady && !encryptionConfigured && <p role="alert" className="mt-3 text-sm text-red-700">The server needs GEMINI_USER_KEY_ENCRYPTION_SECRET before personal keys can be saved.</p>}
+      {!demo && keyStoreReady && !encryptionConfigured && (
+        <div role="alert" className="mt-3 rounded-xl bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+          <p className="font-semibold">Set up key encryption to add your personal Gemini key</p>
+          <p className="mt-1">Generate a secret with <code className="rounded bg-amber-100 px-1.5 py-0.5">node -e &quot;console.log(require(&apos;node:crypto&apos;).randomBytes(32).toString(&apos;hex&apos;))&quot;</code>, then add its 64-character output as <code className="rounded bg-amber-100 px-1.5 py-0.5">GEMINI_USER_KEY_ENCRYPTION_SECRET</code> in your server environment.</p>
+          <p className="mt-1">For local development, put it in <code className="rounded bg-amber-100 px-1.5 py-0.5">.env.local</code> and restart the dev server. On Vercel, add it under Project Settings → Environment Variables and redeploy. Keep the same secret; saved keys cannot be decrypted without it.</p>
+        </div>
+      )}
       {message && <p role={message.error ? "alert" : "status"} className={message.error ? "mt-3 text-sm text-red-700" : "mt-3 text-sm text-[#315c35]"}>{message.text}</p>}
 
       {!demo && (
