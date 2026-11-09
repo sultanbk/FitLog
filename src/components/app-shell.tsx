@@ -7,6 +7,7 @@ const items = [
   { id: "exercise", label: "Exercise", href: "/exercise" },
   { id: "progress", label: "Progress", href: "/progress" },
   { id: "profile", label: "Profile", href: "/profile" },
+  { id: "settings", label: "Settings", href: "/settings" },
 ] as const;
 
 export function AppShell({ active, children, mobileAction, sidebarFooter }: { active: (typeof items)[number]["id"]; children: ReactNode; mobileAction?: ReactNode; sidebarFooter?: ReactNode }) {

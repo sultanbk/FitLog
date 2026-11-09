@@ -6,11 +6,11 @@ import { calculateDailyCaloriePlan } from "@/lib/calorie-target";
 export async function POST(request: Request) {
   const form = await request.formData();
   const protein = Number(form.get("protein_g_per_kg"));
-  if (!Number.isFinite(protein) || protein < 1.2 || protein > 2 || Math.round(protein * 10) !== protein * 10) return NextResponse.redirect(new URL("/profile?settingsError=Choose+a+value+from+1.2+to+2.0", request.url), 303);
+  if (!Number.isFinite(protein) || protein < 1.2 || protein > 2 || Math.round(protein * 10) !== protein * 10) return NextResponse.redirect(new URL("/settings?settingsError=Choose+a+value+from+1.2+to+2.0#preferences", request.url), 303);
   const demo = await getDemoState();
   if (demo.active && demo.profile) {
     const profile = { ...demo.profile, protein_g_per_kg: protein };
-    const response = NextResponse.redirect(new URL("/profile?saved=1", request.url), 303);
+    const response = NextResponse.redirect(new URL("/settings?saved=1#preferences", request.url), 303);
     response.cookies.set(DEMO_PROFILE_COOKIE, Buffer.from(JSON.stringify(profile)).toString("base64url"), { httpOnly: true, sameSite: "lax", secure: false, path: "/", maxAge: DEMO_COOKIE_MAX_AGE });
     return response;
   }
@@ -21,5 +21,5 @@ export async function POST(request: Request) {
   if (!current) return NextResponse.redirect(new URL("/onboarding", request.url), 303);
   const plan = calculateDailyCaloriePlan({ ageYears: current.age_years, sex: current.sex, activityLevel: current.activity_level, heightCm: Number(current.height_cm), currentWeightKg: Number(current.current_weight_kg), goalWeightKg: Number(current.goal_weight_kg), durationDays: current.goal_duration_days, proteinGramsPerKg: protein });
   const { error } = await supabase.from("profiles").update({ protein_g_per_kg: protein, daily_calorie_target: plan.dailyCalorieTarget, maintenance_calories: plan.maintenanceCalories }).eq("id", user.id);
-  return NextResponse.redirect(new URL(error ? "/profile?settingsError=Could+not+save+settings" : "/profile?saved=1", request.url), 303);
+  return NextResponse.redirect(new URL(error ? "/settings?settingsError=Could+not+save+settings#preferences" : "/settings?saved=1#preferences", request.url), 303);
 }

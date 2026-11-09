@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { DEMO_COOKIE_MAX_AGE, DEMO_FOOD_MEMORY_COOKIE, DEMO_PROFILE_COOKIE, getDemoFoodMemories, getDemoState, type FoodMemory } from "@/lib/demo-session";
 
 function back(request: Request, value: string) {
-  const url = new URL("/profile", request.url); url.searchParams.set("memoryMessage", value); url.hash = "food-memory";
+  const url = new URL("/settings", request.url); url.searchParams.set("memoryMessage", value); url.hash = "food-memory";
   return NextResponse.redirect(url, 303);
 }
 

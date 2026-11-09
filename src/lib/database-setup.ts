@@ -14,12 +14,17 @@ const migrationByTable: Record<string, string[]> = {
   food_entries: ["20261109000300_food_entries_and_protein_settings.sql"],
   food_memory: ["20261109000500_user_food_memory.sql", "20261109000800_food_memory_servings.sql"],
   quick_adds: ["20261109000600_quick_adds.sql", "20261110000200_edit_quick_adds.sql"],
+  user_gemini_keys: ["20261110000600_user_gemini_keys.sql"],
   weigh_ins: ["20261109000200_create_weigh_ins.sql"],
 };
 
 export function getDatabaseSetupIssue(error: { code?: string | null; message?: string | null; details?: string | null }): DatabaseSetupIssue | null {
+  const message = `${error.message ?? ""} ${error.details ?? ""}`.toLowerCase();
+  if ((error.code === "PGRST202" || error.code === "42883" || !error.code) &&
+      ["has_my_gemini_key", "get_my_gemini_key", "set_my_gemini_key", "delete_my_gemini_key"].some((name) => message.includes(name))) {
+    return { table: "user_gemini_keys", migrations: migrationByTable.user_gemini_keys };
+  }
   if (error.code === "42703" || error.code === "PGRST204") {
-    const message = `${error.message ?? ""} ${error.details ?? ""}`.toLowerCase();
     const column = Object.keys(profileColumnMigrations).find((name) => message.includes(name));
     if (column) {
       return { table: "profiles", column, migrations: profileColumnMigrations[column] };
@@ -27,7 +32,6 @@ export function getDatabaseSetupIssue(error: { code?: string | null; message?: s
     return null;
   }
   if (error.code !== "PGRST205" && error.code !== "42P01") return null;
-  const message = `${error.message ?? ""} ${error.details ?? ""}`.toLowerCase();
   const table = Object.keys(migrationByTable).find((name) =>
     message.includes(name) && (message.includes("table") || message.includes("relation")),
   );

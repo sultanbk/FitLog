@@ -44,8 +44,25 @@ test("missing meal ideas consent points to its migration", () => {
   });
 });
 
+test("missing personal Gemini key RPC points to its migration", () => {
+  assert.deepEqual(getDatabaseSetupIssue({
+    code: "PGRST202",
+    message: "Could not find the function public.has_my_gemini_key in the schema cache",
+  }), {
+    table: "user_gemini_keys",
+    migrations: ["20261110000600_user_gemini_keys.sql"],
+  });
+  assert.deepEqual(getDatabaseSetupIssue({
+    message: "Could not find the function public.has_my_gemini_key in the schema cache",
+  }), {
+    table: "user_gemini_keys",
+    migrations: ["20261110000600_user_gemini_keys.sql"],
+  });
+});
+
 test("unrelated database errors are not mistaken for missing table setup", () => {
   assert.equal(getDatabaseSetupIssue({ code: "42501", message: "permission denied" }), null);
   assert.equal(getDatabaseSetupIssue({ code: "PGRST205", message: "Could not find the column in the schema cache" }), null);
   assert.equal(getDatabaseSetupIssue({ code: "PGRST205", message: "Could not find the table 'public.shares' in the schema cache" }), null);
+  assert.equal(getDatabaseSetupIssue({ code: "PGRST202", message: "Could not find the function public.some_other_function" }), null);
 });

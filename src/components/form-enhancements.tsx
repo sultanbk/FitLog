@@ -90,6 +90,10 @@ export function FormEnhancements() {
   useEffect(() => {
     const draftTimers = new Map<HTMLFormElement, ReturnType<typeof setTimeout>>();
     const params = new URLSearchParams(search);
+    if (params.get("dataCleared") === "1" && !clearDrafts(draftTimers)) {
+      const status = document.querySelector<HTMLElement>("[data-clear-data-status]");
+      if (status) status.textContent = "Your FitLog data was deleted, but this tab could not clear its session-only drafts. Close this tab to remove any remaining drafts.";
+    }
     const saved = successParams.some((param) => params.has(param) && params.get(param) !== "0") ||
       (params.has("memoryMessage") && !["error", "invalid"].includes(params.get("memoryMessage") ?? ""));
     let pendingKey: string | null = null;

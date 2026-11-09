@@ -18,7 +18,7 @@ export async function POST(request: Request) {
   const demo = process.env.FITLOG_ENABLE_DEMO === "true" ? await getDemoState() : { active: false, profile: null };
   if (process.env.FITLOG_ENABLE_DEMO === "true" && (!demo.active || !demo.profile)) return NextResponse.redirect(new URL("/login", request.url), 303);
   if (demo.active && demo.profile) {
-    const response = NextResponse.redirect(new URL(`/profile?${queryKey}=${enabled ? "enabled" : "disabled"}`, request.url), 303);
+    const response = NextResponse.redirect(new URL(`/settings?${queryKey}=${enabled ? "enabled" : "disabled"}#ai-privacy`, request.url), 303);
     response.cookies.set(DEMO_PROFILE_COOKIE, Buffer.from(JSON.stringify({ ...demo.profile, [setting]: enabled })).toString("base64url"), { httpOnly: true, sameSite: "lax", secure: false, path: "/", maxAge: DEMO_COOKIE_MAX_AGE });
     return response;
   }
@@ -26,5 +26,5 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.redirect(new URL("/login", request.url), 303);
   const { error } = await supabase.from("profiles").update({ [setting]: enabled }).eq("id", user.id);
-  return NextResponse.redirect(new URL(`/profile?${queryKey}=${error ? "error" : enabled ? "enabled" : "disabled"}`, request.url), 303);
+  return NextResponse.redirect(new URL(`/settings?${queryKey}=${error ? "error" : enabled ? "enabled" : "disabled"}#ai-privacy`, request.url), 303);
 }

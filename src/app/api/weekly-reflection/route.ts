@@ -3,6 +3,7 @@ import { getDemoExerciseLogs, getDemoFoodEntries, getDemoState } from "@/lib/dem
 import { GEMINI_MODEL } from "@/lib/gemini-config";
 import { createClient } from "@/lib/supabase/server";
 import { buildWeeklyReflectionSummary, isWeeklyReflection, type ReflectionExerciseRecord, type ReflectionFoodRecord } from "@/lib/weekly-reflection";
+import { resolveGeminiApiKey } from "@/lib/gemini-api-key";
 
 const responseSchema = {
   type: "OBJECT",
@@ -26,6 +27,7 @@ export async function POST(request: Request) {
   }).format(new Date());
   let food: ReflectionFoodRecord[] = [];
   let exercise: ReflectionExerciseRecord[] = [];
+  let apiKey = process.env.GEMINI_API_KEY ?? null;
 
   if (process.env.FITLOG_ENABLE_DEMO === "true") {
     const demo = await getDemoState();
@@ -51,6 +53,12 @@ export async function POST(request: Request) {
     if (profile?.gemini_weekly_reflections_enabled !== true) {
       return NextResponse.json({ error: "Turn on weekly reflections in Profile before sending your activity summary to Google." }, { status: 403 });
     }
+    const keyResult = await resolveGeminiApiKey(supabase, user.id);
+    if ("error" in keyResult) {
+      console.error("Could not resolve personal Gemini key", { reason: keyResult.error });
+      return NextResponse.json({ error: "Your Gemini key settings could not be loaded. Please try again." }, { status: 500 });
+    }
+    apiKey = keyResult.apiKey;
 
     const start = new Date(Date.parse(`${today}T00:00:00+05:30`) - 6 * 24 * 60 * 60 * 1000)
       .toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
@@ -82,8 +90,7 @@ export async function POST(request: Request) {
     });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: "Gemini is not configured yet. Add GEMINI_API_KEY to the server environment." }, { status: 503 });
+  if (!apiKey) return NextResponse.json({ error: "Gemini is not configured. Add a personal key in Settings or ask the FitLog administrator to configure the server key." }, { status: 503 });
 
   let response: Response;
   try {

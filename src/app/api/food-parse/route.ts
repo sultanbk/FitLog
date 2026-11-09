@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getDemoFoodMemories, getDemoState, type FoodMemory } from "@/lib/demo-session";
 import { GEMINI_MODEL } from "@/lib/gemini-config";
 import { isFoodParseResult } from "@/lib/food-parse";
+import { resolveGeminiApiKey } from "@/lib/gemini-api-key";
 
 const itemSchema = {
   type: "OBJECT",
@@ -18,6 +19,7 @@ export async function POST(request: Request) {
   const isDemo = process.env.FITLOG_ENABLE_DEMO === "true";
   let memoryEnabled = false;
   let memories: FoodMemory[] = [];
+  let apiKey = process.env.GEMINI_API_KEY ?? null;
   if (isDemo) {
     const demo = await getDemoState();
     if (!demo.active || !demo.profile) return NextResponse.json({ error: "Please sign in and finish your profile first." }, { status: 401 });
@@ -30,6 +32,12 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: "Please sign in first." }, { status: 401 });
     const { data: profile } = await supabase.from("profiles").select("food_memory_enabled,gemini_food_parsing_enabled").eq("id", user.id).maybeSingle();
     if (profile?.gemini_food_parsing_enabled !== true) return NextResponse.json({ error: "Gemini food parsing is off. Turn it on in Profile to send food text to Google." }, { status: 403 });
+    const keyResult = await resolveGeminiApiKey(supabase, user.id);
+    if ("error" in keyResult) {
+      console.error("Could not resolve personal Gemini key", { reason: keyResult.error });
+      return NextResponse.json({ error: "Your Gemini key settings could not be loaded. Please try again." }, { status: 500 });
+    }
+    apiKey = keyResult.apiKey;
     memoryEnabled = profile.food_memory_enabled === true;
     if (memoryEnabled) {
       const { data } = await supabase.from("food_memory").select("id,name,serving_description,calories,protein_g,carbs_g,fat_g,updated_at").eq("user_id", user.id).order("updated_at", { ascending: false }).limit(20);
@@ -51,8 +59,7 @@ export async function POST(request: Request) {
     const matched = tokens.filter((token) => normalizedText.includes(token)).length;
     return tokens.length > 0 && (matched === tokens.length || matched >= Math.min(2, tokens.length));
   }).slice(0, 10) : [];
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: "Gemini is not configured yet. Add GEMINI_API_KEY to the server environment." }, { status: 503 });
+  if (!apiKey) return NextResponse.json({ error: "Gemini is not configured. Add a personal key in Settings or ask the FitLog administrator to configure the server key." }, { status: 503 });
 
   let response: Response;
   try {

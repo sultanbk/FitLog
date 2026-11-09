@@ -22,7 +22,8 @@ export type CaloriePlan = {
   dailyCalorieTarget: number;
   proteinTargetGrams: number;
   proteinGramsPerKg: number;
-  daysAtCappedRate: number;
+  estimatedWeeklyWeightChangeKg: number;
+  estimatedDaysToGoal: number | null;
   capApplied: boolean;
   capMessage: string | null;
   floorApplied: boolean;
@@ -97,6 +98,10 @@ export function calculateDailyCaloriePlan(input: CaloriePlanInput): CaloriePlan 
   const floorMessage = floorApplied
     ? `The loss target was raised to the ${LOSS_CALORIE_FLOOR.toLocaleString()} kcal/day minimum.`
     : null;
+  const estimatedWeeklyWeightChangeKg = (dailyCalorieTarget - maintenanceCalories) * 7 / KCAL_PER_KG;
+  const estimatedDaysToGoal = direction !== 0 && Math.sign(estimatedWeeklyWeightChangeKg) === direction
+    ? Math.ceil(Math.abs(goalWeightKg - currentWeightKg) / Math.abs(estimatedWeeklyWeightChangeKg) * 7)
+    : null;
 
   return {
     bmrCalories: Math.round(bmr),
@@ -108,7 +113,8 @@ export function calculateDailyCaloriePlan(input: CaloriePlanInput): CaloriePlan 
     dailyCalorieTarget,
     proteinTargetGrams: Math.round(currentWeightKg * proteinGramsPerKg),
     proteinGramsPerKg,
-    daysAtCappedRate: direction === 0 ? 0 : Math.ceil(Math.abs(goalWeightKg - currentWeightKg) / cappedWeeklyChangeKg * 7),
+    estimatedWeeklyWeightChangeKg,
+    estimatedDaysToGoal,
     capApplied,
     capMessage,
     floorApplied,

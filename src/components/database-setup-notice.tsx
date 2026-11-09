@@ -2,7 +2,7 @@ import { AppShell } from "@/components/app-shell";
 import type { DatabaseSetupIssue } from "@/lib/database-setup";
 
 type Props = {
-  active: "today" | "exercise" | "progress" | "profile";
+  active: "today" | "exercise" | "progress" | "profile" | "settings";
   issue: DatabaseSetupIssue;
 };
 

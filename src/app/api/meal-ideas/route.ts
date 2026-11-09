@@ -3,6 +3,7 @@ import { getDemoFoodEntries, getDemoQuickAdds, getDemoState } from "@/lib/demo-s
 import { GEMINI_MODEL } from "@/lib/gemini-config";
 import { buildMealIdeaContext, isMealIdeaResponse } from "@/lib/meal-ideas";
 import { createClient } from "@/lib/supabase/server";
+import { resolveGeminiApiKey } from "@/lib/gemini-api-key";
 
 const responseSchema = {
   type: "OBJECT",
@@ -48,6 +49,7 @@ export async function POST(request: Request) {
   let proteinTarget = 0;
   let entries: { calories: number; protein_g: number }[] = [];
   let favorites: string[] = [];
+  let apiKey = process.env.GEMINI_API_KEY ?? null;
 
   if (process.env.FITLOG_ENABLE_DEMO === "true") {
     const demo = await getDemoState();
@@ -76,6 +78,12 @@ export async function POST(request: Request) {
     if (profile?.gemini_meal_ideas_enabled !== true) {
       return NextResponse.json({ error: "Turn on Gemini meal ideas in Profile before sending today’s nutrition summary to Google." }, { status: 403 });
     }
+    const keyResult = await resolveGeminiApiKey(supabase, user.id);
+    if ("error" in keyResult) {
+      console.error("Could not resolve personal Gemini key", { reason: keyResult.error });
+      return NextResponse.json({ error: "Your Gemini key settings could not be loaded. Please try again." }, { status: 500 });
+    }
+    apiKey = keyResult.apiKey;
     calorieTarget = Number(profile.daily_calorie_target);
     proteinTarget = Math.round(Number(profile.current_weight_kg) * Number(profile.protein_g_per_kg ?? 1.5));
     const [foodResult, favoritesResult] = await Promise.all([
@@ -100,8 +108,7 @@ export async function POST(request: Request) {
     console.error("Invalid nutrition summary for Gemini meal ideas");
     return NextResponse.json({ error: "Could not prepare your nutrition summary. Please try again." }, { status: 500 });
   }
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: "Gemini is not configured yet. Add GEMINI_API_KEY to the server environment." }, { status: 503 });
+  if (!apiKey) return NextResponse.json({ error: "Gemini is not configured. Add a personal key in Settings or ask the FitLog administrator to configure the server key." }, { status: 503 });
 
   let response: Response;
   try {
