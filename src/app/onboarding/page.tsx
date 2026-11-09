@@ -35,11 +35,13 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
           <p className="mt-3 max-w-xl text-sm leading-6 text-[#7b8077]">These details help us estimate your daily target. You can update them whenever you need.</p>
           {error && <p role="alert" className="mt-5 rounded-lg bg-red-50 p-4 text-sm text-red-700">{error}</p>}
           {isLocalDemo ? (
-            <form action="/api/demo/profile" method="post" className="mt-8 space-y-5">
+            <form action="/api/demo/profile" method="post" data-draft-key="profile-onboarding" className="mt-8 space-y-5">
+              <p data-draft-status className="text-xs text-[#7b8077]">Your unfinished profile is saved only in this browser tab.</p>
               <ProfileFields />
             </form>
           ) : (
-            <form action={saveProfile} className="mt-8 space-y-5">
+            <form action={saveProfile} data-draft-key="profile-onboarding" className="mt-8 space-y-5">
+              <p data-draft-status className="text-xs text-[#7b8077]">Your unfinished profile is saved only in this browser tab.</p>
               <ProfileFields />
             </form>
           )}

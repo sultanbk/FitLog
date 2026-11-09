@@ -61,10 +61,10 @@ export function ProgressChart({ title, description, buckets, metric, unit, color
                 if (value === null) return null;
                 const width = Math.min(24, step * 0.58);
                 const height = value === 0 ? 0 : Math.max(2, (value / maximum) * (baseline - top));
-                return <g key={bucket.key}><rect x={20 + step * (index + 0.5) - width / 2} y={baseline - height} width={width} height={height} rx="3" fill={color}><title>{bucket.label}: {value.toLocaleString()} {unit}</title></rect></g>;
+                return <g key={bucket.key}><rect x={20 + step * (index + 0.5) - width / 2} y={baseline - height} width={width} height={height} rx="3" fill={color}><title>{`${bucket.key}: ${value} ${unit}`}</title></rect></g>;
               })}
               {chartType === "line" && coordinates.length > 1 && <polyline points={coordinates.map(({ x, y }) => `${x},${y}`).join(" ")} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />}
-              {chartType === "line" && coordinates.map((point) => <circle key={point.key} cx={point.x} cy={point.y} r="4" fill="#fffefa" stroke={color} strokeWidth="2"><title>{point.label}: {point.value.toFixed(1)} {unit}</title></circle>)}
+              {chartType === "line" && coordinates.map((point) => <circle key={point.key} cx={point.x} cy={point.y} r="4" fill="#fffefa" stroke={color} strokeWidth="2"><title>{`${point.key}: ${point.value} ${unit}`}</title></circle>)}
               {chartType === "line" && coordinates.length === 1 && <circle cx={coordinates[0].x} cy={coordinates[0].y} r="4" fill="#fffefa" stroke={color} strokeWidth="2" />}
               {dateLabels.map((bucket) => {
                 const index = buckets.findIndex((entry) => entry.key === bucket.key);

@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
+import { FormEnhancements } from "@/components/form-enhancements";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -7,5 +9,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}</body></html>;
+  return <html lang="en"><body><Suspense fallback={null}><FormEnhancements /></Suspense>{children}</body></html>;
 }

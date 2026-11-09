@@ -50,7 +50,7 @@ export async function saveProfile(formData: FormData) {
       path: "/",
       maxAge: DEMO_COOKIE_MAX_AGE,
     });
-    redirect("/today");
+    redirect("/today?profileSaved=1");
   }
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -70,5 +70,5 @@ export async function saveProfile(formData: FormData) {
     protein_g_per_kg: 1.5,
   });
   if (error) redirect("/onboarding?error=Could+not+save+your+profile.+Please+try+again");
-  redirect("/today");
+  redirect("/today?profileSaved=1");
 }

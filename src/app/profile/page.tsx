@@ -6,6 +6,9 @@ import { getDemoFoodMemories, getDemoState, type FoodMemory } from "@/lib/demo-s
 import { createClient } from "@/lib/supabase/server";
 import { MemoryClearForm } from "@/components/memory-clear-form";
 import { changePassword } from "@/app/account/actions";
+import { FormSubmitButton } from "@/components/form-submit-button";
+import { DatabaseSetupNotice } from "@/components/database-setup-notice";
+import { getDatabaseSetupIssue } from "@/lib/database-setup";
 
 type Profile = {
   age_years: number;
@@ -18,13 +21,15 @@ type Profile = {
   protein_g_per_kg?: number;
 };
 
-export default async function ProfilePage({ searchParams }: { searchParams: Promise<{ saved?: string; settingsError?: string; memoryMessage?: string; gemini?: string; passwordSaved?: string; passwordError?: string; profileUpdated?: string }> }) {
+export default async function ProfilePage({ searchParams }: { searchParams: Promise<{ saved?: string; settingsError?: string; memoryMessage?: string; gemini?: string; reflection?: string; mealIdeas?: string; passwordSaved?: string; passwordError?: string; profileUpdated?: string }> }) {
   const params = await searchParams;
   let profile: Profile | null = null;
   const localDemo = process.env.FITLOG_ENABLE_DEMO === "true";
   let memories: FoodMemory[] = [];
   let memoryEnabled = false;
   let geminiEnabled = false;
+  let reflectionEnabled = false;
+  let mealIdeasEnabled = false;
 
   if (localDemo) {
     const demo = await getDemoState();
@@ -33,17 +38,26 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
     memories = await getDemoFoodMemories();
     memoryEnabled = demo.profile?.food_memory_enabled === true;
     geminiEnabled = demo.profile?.gemini_food_parsing_enabled === true;
+    reflectionEnabled = demo.profile?.gemini_weekly_reflections_enabled === true;
+    mealIdeasEnabled = demo.profile?.gemini_meal_ideas_enabled === true;
   } else {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) redirect("/login");
-    const { data } = await supabase.from("profiles")
-      .select("age_years,sex,activity_level,height_cm,current_weight_kg,goal_weight_kg,goal_duration_days,protein_g_per_kg,food_memory_enabled,gemini_food_parsing_enabled")
+    const { data, error: profileError } = await supabase.from("profiles")
+      .select("age_years,sex,activity_level,height_cm,current_weight_kg,goal_weight_kg,goal_duration_days,protein_g_per_kg,food_memory_enabled,gemini_food_parsing_enabled,gemini_weekly_reflections_enabled,gemini_meal_ideas_enabled")
       .eq("id", user.id)
       .maybeSingle();
+    if (profileError) {
+      const setupIssue = getDatabaseSetupIssue(profileError);
+      if (setupIssue) return <DatabaseSetupNotice active="profile" issue={setupIssue} />;
+      throw new Error(`Could not load your profile settings: ${profileError.message}`);
+    }
     profile = data as Profile | null;
     memoryEnabled = data?.food_memory_enabled === true;
     geminiEnabled = data?.gemini_food_parsing_enabled === true;
+    reflectionEnabled = data?.gemini_weekly_reflections_enabled === true;
+    mealIdeasEnabled = data?.gemini_meal_ideas_enabled === true;
     const { data: savedMemories } = await supabase.from("food_memory")
       .select("id,name,serving_description,calories,protein_g,carbs_g,fat_g,updated_at")
       .eq("user_id", user.id)
@@ -80,7 +94,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
   }).format(date);
   const adjustment = plan.dailySurplusDeficitCalories;
   const signOutAction = localDemo ? "/api/demo/logout" : "/api/auth/logout";
-  const signOut = <form action={signOutAction} method="post"><button className="fit-signout-button">Sign out</button></form>;
+  const signOut = <form action={signOutAction} method="post" data-clear-drafts-on-submit="true"><button data-pending-label="Signing out…" className="fit-signout-button">Sign out</button></form>;
 
   return (
     <AppShell active="profile" mobileAction={signOut} sidebarFooter={signOut}>
@@ -94,7 +108,6 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
         <a href="#goal-plan" className="shrink-0 rounded-full border border-[#e6e3da] bg-[#fffefa] px-3 py-2 text-[#62685f] hover:text-[#3e5944]">Daily plan</a>
         <a href="#nutrition" className="shrink-0 rounded-full border border-[#e6e3da] bg-[#fffefa] px-3 py-2 text-[#62685f] hover:text-[#3e5944]">Nutrition</a>
         <a href="#ai-food" className="shrink-0 rounded-full border border-[#e6e3da] bg-[#fffefa] px-3 py-2 text-[#62685f] hover:text-[#3e5944]">AI food tools</a>
-        <a href="#food-memory" className="shrink-0 rounded-full border border-[#e6e3da] bg-[#fffefa] px-3 py-2 text-[#62685f] hover:text-[#3e5944]">Food memory</a>
         {!localDemo && <a href="#account-password" className="shrink-0 rounded-full border border-[#e6e3da] bg-[#fffefa] px-3 py-2 text-[#62685f] hover:text-[#3e5944]">Account</a>}
         <a href="#starting-point" className="shrink-0 rounded-full border border-[#e6e3da] bg-[#fffefa] px-3 py-2 text-[#62685f] hover:text-[#3e5944]">Starting point</a>
       </nav>
@@ -128,12 +141,13 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
         <SectionHeading id="protein-preference-title" title="Nutrition preference" description="Choose a daily protein estimate from 1.2 to 2.0 grams per kg." />
         {params.saved && <p role="status" className="mt-4 rounded-xl bg-[#edf5e9] p-3 text-sm text-[#315c35]">Settings saved.</p>}
         {params.settingsError && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{params.settingsError.replaceAll("+", " ")}</p>}
-        <form action="/api/profile/settings" method="post" className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+        <p data-draft-status className="mt-4 text-xs text-[#7b8077]">Your unfinished preference is saved only in this browser tab.</p>
+        <form action="/api/profile/settings" method="post" data-draft-key="protein-preference" className="mt-2 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
           <label className="block text-sm font-medium text-[#454c42]">
             Protein g/kg
-            <input type="number" name="protein_g_per_kg" min="1.2" max="2.0" step="0.1" defaultValue={proteinRatio.toFixed(1)} required className="fit-input mt-1.5" />
+            <input type="number" inputMode="decimal" name="protein_g_per_kg" min="1.2" max="2.0" step="0.1" defaultValue={proteinRatio.toFixed(1)} required className="fit-input mt-1.5" />
           </label>
-          <button className="fit-button-primary w-full sm:w-auto sm:min-w-28">Save preference</button>
+          <button data-pending-label="Saving…" className="fit-button-primary w-full sm:w-auto sm:min-w-28">Save preference</button>
         </form>
       </section>
 
@@ -147,57 +161,100 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
         </p>
         {params.gemini && <p role="status" className="mt-3 text-sm text-[#315c35]">{params.gemini === "enabled" ? "Gemini food parsing is on." : params.gemini === "disabled" ? "Gemini food parsing is off." : "Could not update this setting."}</p>}
         <form action="/api/profile/ai-consent" method="post" className="mt-4">
+          <input type="hidden" name="feature" value="food-parsing" />
           <input type="hidden" name="enabled" value={geminiEnabled ? "false" : "true"} />
           <button className="fit-button-primary">{geminiEnabled ? "Turn Gemini off" : "Turn Gemini on"}</button>
         </form>
         <p className="mt-3 text-xs leading-5 text-[#81877e]">Food memory has a separate setting and can be managed below.</p>
+        <div className="mt-5 border-t border-[#efede7] pt-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-[#35483a]">Weekly reflections</h3>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-[#697066]">When you request a reflection, FitLog sends Gemini only seven-day totals and weekday logging counts—not food names, individual entries, or weight. This is a separate optional setting; reflections are never generated automatically. Google’s unpaid API tier may use submitted summaries to improve its services and may allow human review.</p>
+            </div>
+            <span className={reflectionEnabled ? "rounded-full bg-[#edf5e9] px-3 py-1 text-xs font-semibold text-[#315c35]" : "rounded-full bg-[#f1f2ef] px-3 py-1 text-xs font-semibold text-[#697066]"}>{reflectionEnabled ? "On" : "Off"}</span>
+          </div>
+          {params.reflection && <p role="status" className="mt-3 text-sm text-[#315c35]">{params.reflection === "enabled" ? "Weekly reflections are on." : params.reflection === "disabled" ? "Weekly reflections are off." : "Could not update weekly reflection settings."}</p>}
+          <form action="/api/profile/ai-consent" method="post" className="mt-3">
+            <input type="hidden" name="feature" value="weekly-reflections" />
+            <input type="hidden" name="enabled" value={reflectionEnabled ? "false" : "true"} />
+            <button className="fit-button-primary">{reflectionEnabled ? "Turn reflections off" : "Turn reflections on"}</button>
+          </form>
+        </div>
+        <div className="mt-5 border-t border-[#efede7] pt-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-[#35483a]">Meal ideas</h3>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-[#697066]">When you ask for ideas on Today, Gemini receives your remaining calorie/protein estimates and up to 8 saved favorite names as inspiration. Individual logged foods are not sent. This is separate from food parsing and reflections; suggestions are never saved automatically. Google’s unpaid API tier may use submitted content to improve its services and may allow human review.</p>
+            </div>
+            <span className={mealIdeasEnabled ? "rounded-full bg-[#edf5e9] px-3 py-1 text-xs font-semibold text-[#315c35]" : "rounded-full bg-[#f1f2ef] px-3 py-1 text-xs font-semibold text-[#697066]"}>{mealIdeasEnabled ? "On" : "Off"}</span>
+          </div>
+          {params.mealIdeas && <p role="status" className="mt-3 text-sm text-[#315c35]">{params.mealIdeas === "enabled" ? "Gemini meal ideas are on." : params.mealIdeas === "disabled" ? "Gemini meal ideas are off." : "Could not update meal ideas settings."}</p>}
+          <form action="/api/profile/ai-consent" method="post" className="mt-3">
+            <input type="hidden" name="feature" value="meal-ideas" />
+            <input type="hidden" name="enabled" value={mealIdeasEnabled ? "false" : "true"} />
+            <button className="fit-button-primary">{mealIdeasEnabled ? "Turn meal ideas off" : "Turn meal ideas on"}</button>
+          </form>
+        </div>
       </section>
 
       <section id="food-memory" aria-labelledby="food-memory-title" className="fit-card mt-5 scroll-mt-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <SectionHeading id="food-memory-title" title="Saved food memory" description="When enabled, matching saved foods are included with your description sent to Gemini. Memories stay in your account and can be edited or deleted here." />
-          <span className={memoryEnabled ? "rounded-full bg-[#edf5e9] px-3 py-1 text-xs font-semibold text-[#315c35]" : "rounded-full bg-[#f1f2ef] px-3 py-1 text-xs font-semibold text-[#697066]"}>{memoryEnabled ? "On" : "Off"}</span>
-        </div>
-        <form action="/api/food-memory" method="post" className="mt-4 flex flex-wrap items-center gap-3">
-          <input type="hidden" name="action" value="toggle" />
-          <input type="hidden" name="enabled" value={memoryEnabled ? "false" : "true"} />
-          <button className="fit-button-primary">{memoryEnabled ? "Turn memory off" : "Turn memory on"}</button>
-          <span className="text-sm text-[#697066]">Memory is {memoryEnabled ? "on" : "off"}.</span>
-        </form>
-        {params.memoryMessage && <p role="status" className={params.memoryMessage === "error" || params.memoryMessage === "invalid" ? "mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700" : "mt-4 rounded-xl bg-[#edf5e9] p-3 text-sm text-[#335c2c]"}>{memoryMessageText(params.memoryMessage)}</p>}
-        {memories.length === 0 ? (
-          <p className="mt-5 rounded-2xl bg-[#f5f7f2] p-4 text-sm leading-6 text-[#697066]">No saved food memories yet. Confirm a food from a parsed meal and choose to remember it.</p>
-        ) : (
-          <div className="mt-5 space-y-3">
-            {memories.map((memory) => (
-              <article key={memory.id} className="fit-card-lite p-4">
-                <form action="/api/food-memory" method="post" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <input type="hidden" name="action" value="save" />
-                  <input type="hidden" name="id" value={memory.id} />
-                  <label className="col-span-2 text-xs font-medium text-[#697066] sm:col-span-3">
-                    Food name
-                    <input name="name" required maxLength={100} defaultValue={memory.name} className="fit-input mt-1 text-sm" />
-                  </label>
-                  <label className="col-span-2 text-xs font-medium text-[#697066] sm:col-span-1">
-                    Serving
-                    <input name="serving_description" required maxLength={100} defaultValue={memory.serving_description} className="fit-input mt-1 text-sm" />
-                  </label>
-                  <MemoryNumber label="kcal" name="calories" defaultValue={Number(memory.calories)} integer />
-                  <MemoryNumber label="Protein g" name="protein_g" defaultValue={Number(memory.protein_g)} />
-                  <MemoryNumber label="Carbs g" name="carbs_g" defaultValue={Number(memory.carbs_g)} />
-                  <MemoryNumber label="Fat g" name="fat_g" defaultValue={Number(memory.fat_g)} />
-                  <button className="col-span-2 rounded-xl bg-[#eef4ea] px-4 py-3 text-sm font-semibold text-[#315c35] hover:bg-[#e5eee1] sm:col-span-3">Save edits</button>
-                </form>
-                <form action="/api/food-memory" method="post" className="mt-2">
-                  <input type="hidden" name="action" value="delete" />
-                  <input type="hidden" name="id" value={memory.id} />
-                  <button className="rounded-lg px-2 py-2 text-sm font-medium text-red-700 hover:bg-red-50">Delete this memory</button>
-                </form>
-              </article>
-            ))}
-            <div className="pt-2"><MemoryClearForm /></div>
+        <details open={Boolean(params.memoryMessage)} className="group">
+          <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
+            <span>
+              <span id="food-memory-title" className="block text-base font-semibold text-[#252922]">Advanced food memory</span>
+              <span className="mt-1 block text-sm text-[#7b8077]">Optional saved foods for Gemini meal estimates</span>
+            </span>
+            <span className="flex items-center gap-3">
+              <span className={memoryEnabled ? "rounded-full bg-[#edf5e9] px-3 py-1 text-xs font-semibold text-[#315c35]" : "rounded-full bg-[#f1f2ef] px-3 py-1 text-xs font-semibold text-[#697066]"}>{memoryEnabled ? "On" : "Off"} · {memories.length}</span>
+              <span aria-hidden="true" className="text-sm text-[#697066] transition-transform group-open:rotate-180">⌄</span>
+            </span>
+          </summary>
+          <div className="mt-4 border-t border-[#efede7] pt-4">
+            <p className="text-sm leading-6 text-[#697066]">When enabled, matching saved foods are included with your description sent to Gemini. Memories stay in your account and can be edited or deleted here.</p>
+            <form action="/api/food-memory" method="post" className="mt-4 flex flex-wrap items-center gap-3">
+              <input type="hidden" name="action" value="toggle" />
+              <input type="hidden" name="enabled" value={memoryEnabled ? "false" : "true"} />
+              <button className="fit-button-primary">{memoryEnabled ? "Turn memory off" : "Turn memory on"}</button>
+              <span className="text-sm text-[#697066]">Memory is {memoryEnabled ? "on" : "off"}.</span>
+            </form>
+            {params.memoryMessage && <p role="status" className={params.memoryMessage === "error" || params.memoryMessage === "invalid" ? "mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700" : "mt-4 rounded-xl bg-[#edf5e9] p-3 text-sm text-[#335c2c]"}>{memoryMessageText(params.memoryMessage)}</p>}
+            {memories.length === 0 ? (
+              <p className="mt-4 rounded-xl bg-[#f5f7f2] p-4 text-sm leading-6 text-[#697066]">No saved food memories yet. Confirm a food from a parsed meal and choose to remember it.</p>
+            ) : (
+              <div className="mt-4 space-y-3">
+                {memories.map((memory) => (
+                  <article key={memory.id} className="fit-card-lite p-4">
+                    <p data-draft-status className="mb-2 text-xs text-[#7b8077]">Unfinished changes are saved only in this browser tab.</p>
+                    <form action="/api/food-memory" method="post" data-draft-key={`food-memory:${memory.id}`} className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      <input type="hidden" name="action" value="save" />
+                      <input type="hidden" name="id" value={memory.id} />
+                      <label className="col-span-2 text-xs font-medium text-[#697066] sm:col-span-3">
+                        Food name
+                        <input name="name" required maxLength={100} defaultValue={memory.name} className="fit-input mt-1" />
+                      </label>
+                      <label className="col-span-2 text-xs font-medium text-[#697066] sm:col-span-1">
+                        Serving
+                        <input name="serving_description" required maxLength={100} defaultValue={memory.serving_description} className="fit-input mt-1" />
+                      </label>
+                      <MemoryNumber label="kcal" name="calories" defaultValue={Number(memory.calories)} integer />
+                      <MemoryNumber label="Protein g" name="protein_g" defaultValue={Number(memory.protein_g)} />
+                      <MemoryNumber label="Carbs g" name="carbs_g" defaultValue={Number(memory.carbs_g)} />
+                      <MemoryNumber label="Fat g" name="fat_g" defaultValue={Number(memory.fat_g)} />
+                      <button data-pending-label="Saving…" className="col-span-2 rounded-xl bg-[#eef4ea] px-4 py-3 text-sm font-semibold text-[#315c35] hover:bg-[#e5eee1] sm:col-span-3">Save edits</button>
+                    </form>
+                    <form action="/api/food-memory" method="post" className="mt-2">
+                      <input type="hidden" name="action" value="delete" />
+                      <input type="hidden" name="id" value={memory.id} />
+                      <button data-pending-label="Deleting…" className="rounded-lg px-2 py-2 text-sm font-medium text-red-700 hover:bg-red-50">Delete this memory</button>
+                    </form>
+                  </article>
+                ))}
+                <div className="pt-2"><MemoryClearForm /></div>
+              </div>
+            )}
           </div>
-        )}
+        </details>
       </section>
 
       {!localDemo && (
@@ -209,7 +266,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
           <form action={changePassword} className="mt-5 grid gap-3 sm:grid-cols-2">
             <label className="block text-sm font-medium text-[#454c42]">New password<input type="password" name="password" minLength={10} maxLength={128} autoComplete="new-password" required className="fit-input mt-1.5" /></label>
             <label className="block text-sm font-medium text-[#454c42]">Confirm password<input type="password" name="confirm_password" minLength={10} maxLength={128} autoComplete="new-password" required className="fit-input mt-1.5" /></label>
-            <button className="fit-button-primary sm:col-span-2">Update password</button>
+            <FormSubmitButton pendingLabel="Updating…" className="fit-button-primary sm:col-span-2">Update password</FormSubmitButton>
           </form>
         </section>
       )}

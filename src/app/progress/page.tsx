@@ -2,7 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ActivityCalendar } from "@/components/activity-calendar";
 import { AppShell } from "@/components/app-shell";
+import { DatabaseSetupNotice } from "@/components/database-setup-notice";
 import { ProgressChart } from "@/components/progress-chart";
+import { WeeklyReflectionCard } from "@/components/weekly-reflection";
+import { DatabaseSetupError, getDatabaseSetupIssue } from "@/lib/database-setup";
 import { createClient } from "@/lib/supabase/server";
 import {
   buildAnalyticsBuckets,
@@ -69,12 +72,15 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
   let calendarExercises: ExerciseRecord[] = [];
   let calendarWeights: WeightRecord[] = [];
   let suggestedWeight = 0;
+  let reflectionEnabled = false;
   let weightAction = "/api/weigh-ins";
+  let databaseSetupIssue: ReturnType<typeof getDatabaseSetupIssue> = null;
 
   if (localDemo) {
     const demo = await getDemoState();
     if (!demo.active) redirect("/login");
     if (!demo.profile) redirect("/onboarding");
+    reflectionEnabled = demo.profile.gemini_weekly_reflections_enabled === true;
     weightAction = "/api/demo/weigh-ins";
     suggestedWeight = demo.profile.current_weight_kg;
     const [foodEntries, exerciseLogs, weighIns] = await Promise.all([
@@ -102,30 +108,42 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) redirect("/login");
     const { data: profile, error: profileError } = await supabase.from("profiles")
-      .select("current_weight_kg,age_years")
+      .select("current_weight_kg,age_years,gemini_weekly_reflections_enabled")
       .eq("id", user.id)
       .maybeSingle();
-    if (profileError) throw new Error(`Could not load your profile: ${profileError.message}`);
+    if (profileError) {
+      const setupIssue = getDatabaseSetupIssue(profileError);
+      if (setupIssue) return <DatabaseSetupNotice active="progress" issue={setupIssue} />;
+      throw new Error(`Could not load your profile: ${profileError.message}`);
+    }
     if (!profile?.age_years) redirect("/onboarding");
+    reflectionEnabled = profile.gemini_weekly_reflections_enabled === true;
     suggestedWeight = Number(profile.current_weight_kg);
 
-    const analyticsData = await loadAnalyticsData(supabase, user.id, periodStart, today);
-    nutrition = analyticsData.nutrition;
-    exercises = analyticsData.exercises;
-    weights = analyticsData.weights;
-    if (calendarInsidePeriod) {
-      calendarNutrition = nutrition;
-      calendarExercises = exercises;
-      calendarWeights = weights;
-    } else {
-      const calendarData = await loadAnalyticsData(supabase, user.id, calendarStart, calendarEnd);
-      calendarNutrition = calendarData.nutrition;
-      calendarExercises = calendarData.exercises;
-      calendarWeights = calendarData.weights;
+    try {
+      const analyticsData = await loadAnalyticsData(supabase, user.id, periodStart, today);
+      nutrition = analyticsData.nutrition;
+      exercises = analyticsData.exercises;
+      weights = analyticsData.weights;
+      if (calendarInsidePeriod) {
+        calendarNutrition = nutrition;
+        calendarExercises = exercises;
+        calendarWeights = weights;
+      } else {
+        const calendarData = await loadAnalyticsData(supabase, user.id, calendarStart, calendarEnd);
+        calendarNutrition = calendarData.nutrition;
+        calendarExercises = calendarData.exercises;
+        calendarWeights = calendarData.weights;
+      }
+    } catch (error) {
+      if (!(error instanceof DatabaseSetupError)) throw error;
+      databaseSetupIssue = error.issue;
     }
     const latestWeight = [...weights].sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
     if (latestWeight) suggestedWeight = latestWeight.weight_kg;
   }
+
+  if (databaseSetupIssue) return <DatabaseSetupNotice active="progress" issue={databaseSetupIssue} />;
 
   const buckets = buildAnalyticsBuckets(period, today, nutrition, exercises, weights);
   const loggedFoodDays = buckets.reduce((total, bucket) => total + bucket.foodDays, 0);
@@ -174,6 +192,8 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
         {orderedWeights.length > 1 && <p className="mt-2 text-xs leading-5 text-[#7b8077]">Recorded weight change compares your first and latest entries in this range. It’s a measurement, not a judgment.</p>}
       </section>
 
+      <WeeklyReflectionCard enabled={reflectionEnabled} />
+
       <section aria-label={`${period} charts`} className="mt-5 grid gap-4 lg:grid-cols-2">
         <ProgressChart title="Calories" description="Daily total, or monthly total in the yearly view." buckets={buckets} metric="calories" unit="kcal" color="#71856a" />
         <ProgressChart title="Protein" description="Daily total, or monthly total in the yearly view." buckets={buckets} metric="protein" unit="g" color="#b68757" />
@@ -196,14 +216,15 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
           <p className="mt-1 text-sm leading-6 text-[#7b8077]">Enter a reading when it feels useful. Day-to-day changes are normal.</p>
           {params.weightSaved && <p role="status" className="mt-4 rounded-lg bg-[#edf5e9] p-3 text-sm text-[#315c35]">Weight saved.</p>}
           {params.weightError && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{params.weightError.replaceAll("+", " ")}</p>}
-          <form action={weightAction} method="post" className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end lg:grid-cols-1">
+          <p data-draft-status className="mt-3 text-xs text-[#7b8077]">An unfinished reading is saved only in this browser tab.</p>
+          <form action={weightAction} method="post" data-draft-key={`weight:${today}`} className="mt-2 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end lg:grid-cols-1">
             <label className="block text-sm font-medium text-[#454c42]">Weight
               <span className="relative mt-1.5 block">
-                <input className="fit-input pr-14" name="weight_kg" type="number" required min="25" max="350" step="0.1" defaultValue={suggestedWeight} />
+                <input className="fit-input pr-14" name="weight_kg" type="number" inputMode="decimal" required min="25" max="350" step="0.1" defaultValue={suggestedWeight} />
                 <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#81877e]">kg</span>
               </span>
             </label>
-            <button className="fit-button-primary w-full sm:w-auto lg:w-full">Save weigh-in</button>
+            <button data-pending-label="Saving…" className="fit-button-primary w-full sm:w-auto lg:w-full">Save weigh-in</button>
           </form>
         </section>
       </div>
@@ -263,7 +284,11 @@ async function fetchNutrition(supabase: Awaited<ReturnType<typeof createClient>>
       .order("entry_date")
       .order("id")
       .range(offset, offset + 999);
-    if (error) throw new Error(`Could not load nutrition history: ${error.message}`);
+    if (error) {
+      const setupIssue = getDatabaseSetupIssue(error);
+      if (setupIssue) throw new DatabaseSetupError(setupIssue);
+      throw new Error(`Could not load nutrition history: ${error.message}`);
+    }
     rows.push(...(data ?? []).map((row) => ({ entry_date: row.entry_date, calories: Number(row.calories), protein_g: Number(row.protein_g) })));
     if (!data || data.length < 1000) break;
   }
@@ -281,7 +306,11 @@ async function fetchExercises(supabase: Awaited<ReturnType<typeof createClient>>
       .order("entry_date")
       .order("id")
       .range(offset, offset + 999);
-    if (error) throw new Error(`Could not load exercise history: ${error.message}`);
+    if (error) {
+      const setupIssue = getDatabaseSetupIssue(error);
+      if (setupIssue) throw new DatabaseSetupError(setupIssue);
+      throw new Error(`Could not load exercise history: ${error.message}`);
+    }
     rows.push(...(data ?? []).map((row) => ({ entry_date: row.entry_date, repetitions: Number(row.repetitions) })));
     if (!data || data.length < 1000) break;
   }
@@ -299,7 +328,11 @@ async function fetchWeights(supabase: Awaited<ReturnType<typeof createClient>>, 
       .order("created_at")
       .order("id")
       .range(offset, offset + 999);
-    if (error) throw new Error(`Could not load weigh-in history: ${error.message}`);
+    if (error) {
+      const setupIssue = getDatabaseSetupIssue(error);
+      if (setupIssue) throw new DatabaseSetupError(setupIssue);
+      throw new Error(`Could not load weigh-in history: ${error.message}`);
+    }
     rows.push(...(data ?? []).map((row) => ({ weight_kg: Number(row.weight_kg), created_at: row.created_at })));
     if (!data || data.length < 1000) break;
   }

@@ -155,6 +155,8 @@ export function buildAnalyticsBuckets(
 
 export function formatBucketLabel(period: AnalyticsPeriod, key: string) {
   const date = new Date(`${key.length === 7 ? `${key}-01` : key}T12:00:00Z`);
-  if (period === "year") return new Intl.DateTimeFormat("en", { month: "short", timeZone: "UTC" }).format(date);
-  return new Intl.DateTimeFormat("en", { weekday: "short", day: "numeric", timeZone: "UTC" }).format(date);
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  if (period === "year") return months[date.getUTCMonth()];
+  const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  return `${weekdays[date.getUTCDay()]} ${date.getUTCDate()}`;
 }

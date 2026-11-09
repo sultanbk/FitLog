@@ -10,20 +10,47 @@ export function NaturalLanguageLogger({ day }: { day: string }) {
   const [text, setText] = useState("");
   const [items, setItems] = useState<Food[]>([]);
   const [message, setMessage] = useState("");
+  const [clarificationQuestion, setClarificationQuestion] = useState("");
   const [busy, setBusy] = useState(false);
   const [memoryEnabled, setMemoryEnabled] = useState(false);
 
-  async function parse(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setBusy(true); setMessage(""); setItems([]);
+  async function runParse(clarificationAnswer?: string) {
+    setBusy(true); setMessage(""); setItems([]);
     try {
-      const response = await fetch("/api/food-parse", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+      const response = await fetch("/api/food-parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, ...(clarificationAnswer ? { clarificationAnswer } : {}) }),
+      });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not parse this food log.");
+      if (typeof result.clarificationQuestion === "string" && result.clarificationQuestion) {
+        setClarificationQuestion(result.clarificationQuestion);
+        setMemoryEnabled(result.memoryEnabled === true);
+        return;
+      }
+      setClarificationQuestion("");
       if (!result.items.length) { setMessage("I couldn't find any foods in that text. Try describing a meal and portion."); return; }
       setItems(result.items.map((item: Omit<Food, "remember">) => ({ ...item, remember: false })));
       setMemoryEnabled(result.memoryEnabled === true);
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not parse this food log."); }
     finally { setBusy(false); }
+  }
+
+  async function parse(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setClarificationQuestion("");
+    await runParse();
+  }
+
+  async function answerClarification(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const answer = new FormData(event.currentTarget).get("portion_answer");
+    if (typeof answer !== "string" || !answer.trim()) {
+      setMessage("Add a quick portion detail or choose to estimate.");
+      return;
+    }
+    await runParse(answer.trim());
   }
 
   function update(index: number, key: keyof Food, value: string | boolean) {
@@ -40,15 +67,17 @@ export function NaturalLanguageLogger({ day }: { day: string }) {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not save the food entries. Please try again.");
       const warning = result.memoryWarning ? `&memoryWarning=${encodeURIComponent(result.memoryWarning)}` : "";
+      sessionStorage.removeItem(`fitlog-form-draft:food-description:${day}`);
       window.location.assign(`/today?day=${encodeURIComponent(day)}&saved=1${warning}`);
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not save the food entries."); setBusy(false); }
   }
 
   return (
     <div className="mt-5">
-      <form onSubmit={parse} className="space-y-3" aria-busy={busy}>
+      <form onSubmit={parse} data-draft-key={`food-description:${day}`} className="space-y-3" aria-busy={busy}>
+        <p data-draft-status className="text-xs text-[#7b8077]">Your unfinished description is saved only in this browser tab.</p>
         <label htmlFor="food-log-text" className="block text-sm font-medium text-[#62685f]">Describe what you ate</label>
-        <textarea id="food-log-text" required minLength={2} maxLength={5000} value={text} onChange={(event) => setText(event.target.value)} rows={3} placeholder="For example: Breakfast: 2 eggs and 2 slices of toast. Lunch: rice, dal, and a cup of curd." className="fit-input resize-y text-sm" />
+        <textarea id="food-log-text" name="food_description" data-draft-field required minLength={2} maxLength={5000} value={text} onChange={(event) => setText(event.target.value)} rows={3} placeholder="For example: Breakfast: 2 eggs and 2 slices of toast. Lunch: rice, dal, and a cup of curd." className="fit-input resize-y text-sm" />
         <button disabled={busy} className="fit-button-primary w-full disabled:opacity-60">{busy ? "Working…" : "Estimate this meal"}</button>
       </form>
       {message && <p role="alert" className="fit-warning mt-3 p-3 text-sm">{message}</p>}
@@ -56,13 +85,13 @@ export function NaturalLanguageLogger({ day }: { day: string }) {
         <section className="mt-5 border-t border-[#efede7] pt-5">
           <div>
             <h3 className="text-xl">Review before saving</h3>
-            <p className="mt-1 text-sm leading-6 text-[#7b8077]">Check portions and nutrition. Nothing is saved until you confirm these entries.</p>
+            <p className="mt-1 text-sm leading-6 text-[#7b8077]">Check portions and nutrition. Guessed estimates are marked; nothing is saved until you confirm these entries.</p>
           </div>
           <div className="mt-4 space-y-3">
             {items.map((item, index) => (
               <article key={`${index}-${item.name}`} className="rounded-xl border border-[#e6e3da] bg-[#faf9f5] p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-[#7b8077]">Entry {index + 1}</span>
+                  <span className="text-xs font-semibold uppercase tracking-wide text-[#7b8077]">Entry {index + 1} {item.is_guessed && <span className="ml-1 rounded-full bg-[#fff3cf] px-2 py-1 text-[10px] tracking-normal text-[#795b15]">Estimate · check portion</span>}</span>
                   <button type="button" aria-label={`Remove ${item.name}`} onClick={() => setItems((previous) => previous.filter((_, current) => current !== index))} className="rounded-md px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50">Remove</button>
                 </div>
                 <label className="mt-3 block text-xs font-medium text-[#62685f]">Food<input value={item.name} onChange={(event) => update(index, "name", event.target.value)} maxLength={70} className="fit-input mt-1 text-sm" /></label>
@@ -75,9 +104,20 @@ export function NaturalLanguageLogger({ day }: { day: string }) {
                   <NumberInput label="Fat g" value={item.fat_g} onChange={(value) => update(index, "fat_g", value)} />
                 </div>
                 <label className="mt-4 flex items-start gap-2 text-xs leading-5 text-[#76591e]"><input type="checkbox" checked={item.is_guessed} onChange={(event) => update(index, "is_guessed", event.target.checked)} /> These values are guessed or still need checking</label>
-                <label className={`mt-3 flex items-start gap-2 text-xs leading-5 ${memoryEnabled && !item.is_guessed ? "text-[#3e5944]" : "text-[#7b8077]"}`}><input type="checkbox" checked={item.remember} disabled={!memoryEnabled || item.is_guessed} onChange={(event) => update(index, "remember", event.target.checked)} /> Remember this food and its confirmed serving/nutrition values{!memoryEnabled && <Link href="/profile#food-memory" className="underline">Enable memory in Profile</Link>}{memoryEnabled && item.is_guessed && <span>Uncheck guessed after verifying values</span>}</label>
+                <label className={`mt-3 flex items-start gap-2 text-xs leading-5 ${memoryEnabled && !item.is_guessed ? "text-[#3e5944]" : "text-[#7b8077]"}`}><input type="checkbox" checked={item.remember} disabled={!memoryEnabled || item.is_guessed} onChange={(event) => update(index, "remember", event.target.checked)} /> Remember these confirmed values for this food and serving{!memoryEnabled && <Link href="/profile#food-memory" className="underline">Enable memory in Profile</Link>}{memoryEnabled && item.is_guessed && <span>First verify the portion and values, then uncheck “guessed” to save them as a memory.</span>}</label>
               </article>
-            ))}
+            )            )}
+            {clarificationQuestion && (
+              <form onSubmit={answerClarification} className="mt-4 rounded-xl border border-[#e6e3da] bg-[#f5f7f2] p-4" aria-busy={busy}>
+                <label htmlFor="food-portion-answer" className="block text-sm font-semibold text-[#35483a]">{clarificationQuestion}</label>
+                <p className="mt-1 text-xs leading-5 text-[#7b8077]">One quick detail helps make the estimate more useful. You can also skip this and review a clearly marked estimate.</p>
+                <input id="food-portion-answer" name="portion_answer" maxLength={250} autoComplete="off" placeholder="e.g. about 1 cup, medium bowl" className="fit-input mt-3 text-sm" disabled={busy} />
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button disabled={busy} className="fit-button-primary disabled:opacity-60">{busy ? "Updating estimate…" : "Continue with this portion"}</button>
+                  <button type="button" disabled={busy} onClick={() => runParse("I’m not sure; use a clearly marked estimate.")} className="rounded-lg border border-[#d9d7cd] bg-[#fffefa] px-4 py-2 text-sm text-[#62685f] disabled:opacity-60">Estimate it instead</button>
+                </div>
+              </form>
+            )}
           </div>
           <div className="mt-4 flex gap-2">
             <button type="button" disabled={busy || items.length === 0} onClick={save} className="fit-button-primary flex-1 disabled:opacity-60">{busy ? "Saving…" : `Save ${items.length} ${items.length === 1 ? "entry" : "entries"}`}</button>

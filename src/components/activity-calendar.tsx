@@ -15,8 +15,8 @@ const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 export function ActivityCalendar({ month, today, nutritionDays, weightDays, exerciseDays, period }: Props) {
   const previousMonth = shiftMonth(month, -1);
   const nextMonth = shiftMonth(month, 1);
-  const monthDate = new Date(`${month}-01T12:00:00Z`);
-  const title = new Intl.DateTimeFormat("en", { month: "long", year: "numeric", timeZone: "UTC" }).format(monthDate);
+  const [year, monthNumber] = month.split("-").map(Number);
+  const title = `${["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][monthNumber - 1]} ${year}`;
   const days = calendarDays(month);
   const nextHref = `/progress?period=${period}&month=${nextMonth}`;
   const previousHref = `/progress?period=${period}&month=${previousMonth}`;

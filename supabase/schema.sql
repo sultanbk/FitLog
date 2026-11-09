@@ -12,6 +12,8 @@ create table public.profiles (
   protein_g_per_kg numeric(2, 1) not null default 1.5 check (protein_g_per_kg between 1.2 and 2.0),
   food_memory_enabled boolean not null default false,
   gemini_food_parsing_enabled boolean not null default false,
+  gemini_weekly_reflections_enabled boolean not null default false,
+  gemini_meal_ideas_enabled boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -106,7 +108,7 @@ grant select, insert on public.weigh_ins to authenticated;
 grant select, insert, delete on public.exercise_logs to authenticated;
 grant select, insert, update, delete on public.food_entries to authenticated;
 grant select, insert, update, delete on public.food_memory to authenticated;
-grant select, insert, delete on public.quick_adds to authenticated;
+grant select, insert, update, delete on public.quick_adds to authenticated;
 
 create policy "Users can view their own weigh-ins"
   on public.weigh_ins for select to authenticated
@@ -165,6 +167,10 @@ create policy "Users can view their own quick adds"
   using ((select auth.uid()) = user_id);
 create policy "Users can add their own quick adds"
   on public.quick_adds for insert to authenticated
+  with check ((select auth.uid()) = user_id);
+create policy "Users can update their own quick adds"
+  on public.quick_adds for update to authenticated
+  using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 create policy "Users can delete their own quick adds"
   on public.quick_adds for delete to authenticated

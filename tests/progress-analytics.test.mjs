@@ -4,6 +4,7 @@ import {
   buildAnalyticsBuckets,
   calendarDays,
   dayInAppTimezone,
+  formatBucketLabel,
   getPeriodStart,
   isValidDay,
   isValidMonth,
@@ -26,6 +27,11 @@ test("date and month validation rejects impossible dates", () => {
 test("month navigation handles year boundaries", () => {
   assert.equal(shiftMonth("2026-01", -1), "2025-12");
   assert.equal(shiftMonth("2026-12", 1), "2027-01");
+});
+
+test("chart labels use stable English date labels", () => {
+  assert.equal(formatBucketLabel("week", "2026-11-04"), "Wed 4");
+  assert.equal(formatBucketLabel("year", "2026-11"), "Nov");
 });
 
 test("period starts use rolling weeks and months and twelve calendar months", () => {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { ActivityLevel, SexForFormula } from "@/lib/calorie-target";
 import { calculateDailyCaloriePlan } from "@/lib/calorie-target";
-import { DEMO_COOKIE_MAX_AGE, DEMO_PROFILE_COOKIE, DEMO_SESSION_COOKIE } from "@/lib/demo-session";
+import { DEMO_COOKIE_MAX_AGE, DEMO_PROFILE_COOKIE, DEMO_SESSION_COOKIE, getDemoState } from "@/lib/demo-session";
 
 export async function POST(request: Request) {
   if (process.env.FITLOG_ENABLE_DEMO !== "true") return new Response("Not found", { status: 404 });
@@ -30,6 +30,7 @@ export async function POST(request: Request) {
   }
 
   const plan = calculateDailyCaloriePlan({ ageYears, sex, activityLevel, heightCm, currentWeightKg, goalWeightKg, durationDays: goalDurationDays });
+  const existingDemo = await getDemoState();
   const profile = {
     age_years: ageYears,
     sex,
@@ -41,8 +42,12 @@ export async function POST(request: Request) {
     protein_g_per_kg: 1.5,
     daily_calorie_target: plan.dailyCalorieTarget,
     maintenance_calories: plan.maintenanceCalories,
+    food_memory_enabled: existingDemo.profile?.food_memory_enabled ?? false,
+    gemini_food_parsing_enabled: existingDemo.profile?.gemini_food_parsing_enabled ?? false,
+    gemini_weekly_reflections_enabled: existingDemo.profile?.gemini_weekly_reflections_enabled ?? false,
+    gemini_meal_ideas_enabled: existingDemo.profile?.gemini_meal_ideas_enabled ?? false,
   };
-  const response = NextResponse.redirect(new URL("/today", request.url), 303);
+  const response = NextResponse.redirect(new URL("/today?profileSaved=1", request.url), 303);
   response.cookies.set(DEMO_PROFILE_COOKIE, Buffer.from(JSON.stringify(profile)).toString("base64url"), {
     httpOnly: true,
     sameSite: "lax",

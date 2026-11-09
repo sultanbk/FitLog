@@ -2,10 +2,9 @@ import { randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { DEMO_COOKIE_MAX_AGE, DEMO_FOOD_ENTRIES_COOKIE, DEMO_QUICK_ADDS_COOKIE, DEMO_SESSION_COOKIE, getDemoFoodEntries, getDemoQuickAdds, getDemoState } from "@/lib/demo-session";
+import { DEMO_COOKIE_MAX_AGE, DEMO_FOOD_ENTRIES_COOKIE, DEMO_QUICK_ADDS_COOKIE, DEMO_SESSION_COOKIE, getDemoFoodEntries, getDemoQuickAdds, getDemoState, type QuickAdd } from "@/lib/demo-session";
+import { isValidQuickAdd, quickAddNumbers, type QuickAddValues } from "@/lib/quick-adds";
 
-const meals = ["breakfast", "lunch", "snack", "dinner"] as const;
-const numbers = ["calories", "protein_g", "carbs_g", "fat_g"] as const;
 function back(request: Request, day: string, key: string, value: string) {
   const url = new URL("/today", request.url); url.searchParams.set("day", day); url.searchParams.set(key, value);
   return NextResponse.redirect(url, 303);
@@ -18,12 +17,13 @@ export async function POST(request: Request) {
   const day = String(form.get("entry_date") ?? "");
   const id = String(form.get("id") ?? "");
   if (!validDay(day)) return back(request, new Date().toISOString().slice(0, 10), "error", "Invalid+date");
-  if (!["save", "add", "delete"].includes(action)) return back(request, day, "error", "Invalid+quick+add+action");
+  if (!["save", "add", "edit", "delete"].includes(action)) return back(request, day, "error", "Invalid+quick+add+action");
   const name = String(form.get("name") ?? "").trim();
   const meal = String(form.get("meal") ?? "");
   const is_guessed = form.get("is_guessed") === "true";
-  const values = Object.fromEntries(numbers.map((key) => [key, Number(form.get(key))])) as Record<typeof numbers[number], number>;
-  if (action !== "delete" && (name.length < 1 || name.length > 100 || !meals.includes(meal as typeof meals[number]) || numbers.some((key) => !Number.isFinite(values[key]) || values[key] < 0 || values[key] > (key === "calories" ? 20000 : 1000)) || !Number.isInteger(values.calories))) {
+  const rawValues = Object.fromEntries(quickAddNumbers.map((key) => [key, String(form.get(key) ?? "").trim()]));
+  const values = Object.fromEntries(quickAddNumbers.map((key) => [key, Number(rawValues[key])])) as QuickAddValues;
+  if (action !== "delete" && (quickAddNumbers.some((key) => !rawValues[key]) || !isValidQuickAdd(name, meal, values))) {
     return back(request, day, "error", "Check+the+quick+add+details");
   }
 
@@ -37,12 +37,20 @@ export async function POST(request: Request) {
       return back(request, day, "saved", "1");
     }
     if (action === "save") {
-      const next = [{ id: randomUUID(), name, meal: meal as typeof meals[number], ...values, is_guessed, created_at: new Date().toISOString() }, ...quickAdds].slice(0, 8);
+      const next = [{ id: randomUUID(), name, meal: meal as QuickAdd["meal"], ...values, is_guessed, created_at: new Date().toISOString() }, ...quickAdds].slice(0, 8);
+      cookieStore.set(DEMO_QUICK_ADDS_COOKIE, Buffer.from(JSON.stringify(next)).toString("base64url"), { httpOnly: true, sameSite: "lax", secure: false, path: "/", maxAge: DEMO_COOKIE_MAX_AGE });
+      return back(request, day, "saved", "1");
+    }
+    if (action === "edit") {
+      if (!quickAdds.some((item) => item.id === id)) return back(request, day, "error", "Could+not+find+that+favorite");
+      const next = quickAdds.map((item) => item.id === id
+        ? { ...item, name, meal: meal as QuickAdd["meal"], ...values, is_guessed }
+        : item);
       cookieStore.set(DEMO_QUICK_ADDS_COOKIE, Buffer.from(JSON.stringify(next)).toString("base64url"), { httpOnly: true, sameSite: "lax", secure: false, path: "/", maxAge: DEMO_COOKIE_MAX_AGE });
       return back(request, day, "saved", "1");
     }
     const entries = await getDemoFoodEntries();
-    const entry = { id: randomUUID(), entry_date: day, name, meal: meal as typeof meals[number], ...values, is_guessed, created_at: new Date().toISOString() };
+    const entry = { id: randomUUID(), entry_date: day, name, meal: meal as QuickAdd["meal"], ...values, is_guessed, created_at: new Date().toISOString() };
     cookieStore.set(DEMO_FOOD_ENTRIES_COOKIE, Buffer.from(JSON.stringify([entry, ...entries].slice(0, 20))).toString("base64url"), { httpOnly: true, sameSite: "lax", secure: false, path: "/", maxAge: DEMO_COOKIE_MAX_AGE });
     return back(request, day, "saved", "1");
   }
@@ -53,6 +61,16 @@ export async function POST(request: Request) {
   if (action === "delete") {
     const { error } = await supabase.from("quick_adds").delete().eq("id", id).eq("user_id", user.id);
     return back(request, day, error ? "error" : "saved", error ? "Could+not+remove+quick+add" : "1");
+  }
+  if (action === "edit") {
+    const { data, error } = await supabase.from("quick_adds")
+      .update({ name, meal, ...values, is_guessed })
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .select("id")
+      .maybeSingle();
+    if (error || !data) return back(request, day, "error", error ? "Could+not+update+favorite" : "Could+not+find+that+favorite");
+    return back(request, day, "saved", "1");
   }
   if (action === "save") {
     const { data: existing } = await supabase.from("quick_adds").select("id").eq("user_id", user.id).order("created_at", { ascending: false }).limit(20);

@@ -48,7 +48,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       <section className="fit-card" aria-labelledby="profile-readings-title">
         <h2 id="profile-readings-title" className="mb-5 text-2xl">Your readings and goal</h2>
         {params.error && <p role="alert" className="mb-5 rounded-xl bg-red-50 p-3 text-sm text-red-700">{params.error.replaceAll("+", " ")}</p>}
-        {profile && <form action={updateProfile} className="space-y-5"><ProfileFields initialProfile={profile} submitLabel="Save profile changes" /></form>}
+        {profile && <form action={updateProfile} data-draft-key="profile-settings" className="space-y-5"><p data-draft-status className="text-xs text-[#7b8077]">Your unfinished changes are saved only in this browser tab.</p><ProfileFields initialProfile={profile} submitLabel="Save profile changes" /></form>}
       </section>
       <p className="mt-5 text-center text-xs text-[#81877e]">Calorie targets are estimates, not medical advice.</p>
     </AppShell>

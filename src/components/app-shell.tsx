@@ -4,6 +4,7 @@ import { BottomNav } from "@/components/bottom-nav";
 
 const items = [
   { id: "today", label: "Today", href: "/today" },
+  { id: "exercise", label: "Exercise", href: "/exercise" },
   { id: "progress", label: "Progress", href: "/progress" },
   { id: "profile", label: "Profile", href: "/profile" },
 ] as const;

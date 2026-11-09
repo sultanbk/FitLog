@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { suggestedGoalDurationDays } from "@/lib/calorie-target";
+import { FormSubmitButton } from "@/components/form-submit-button";
 
 export type EditableProfile = {
   age_years: number;
@@ -28,15 +29,15 @@ export function ProfileFields({ initialProfile, submitLabel = "Save and see my t
       ["sedentary", "Sedentary"], ["light", "Light"], ["moderate", "Moderate"], ["active", "Active"],
     ]} />
     <Field id="height_cm" label="Height" unit="cm" min="80" max="250" step="0.1" defaultValue={initialProfile ? String(initialProfile.height_cm) : undefined} />
-    <Field id="current_weight_kg" label="Current weight" unit="kg" min="25" max="350" step="0.1" value={currentWeight} onChange={(value) => { setCurrentWeight(value); setPreferredDuration(""); }} />
-    <Field id="goal_weight_kg" label="Goal weight" unit="kg" min="25" max="350" step="0.1" value={goalWeight} onChange={(value) => { setGoalWeight(value); setPreferredDuration(""); }} />
+    <Field id="current_weight_kg" label="Current weight" unit="kg" min="25" max="350" step="0.1" inputMode="decimal" value={currentWeight} onChange={(value) => { setCurrentWeight(value); setPreferredDuration(""); }} />
+    <Field id="goal_weight_kg" label="Goal weight" unit="kg" min="25" max="350" step="0.1" inputMode="decimal" value={goalWeight} onChange={(value) => { setGoalWeight(value); setPreferredDuration(""); }} />
     <div hidden={!timelineNeeded}>
       {suggestedDays !== null && <p className="mb-3 rounded-xl bg-[#edf5e9] p-3 text-sm text-[#335c2c]">Suggested timeline with FitLog’s pace cap: <strong>{suggestedDays} days</strong>{suggestedDays > 3650 ? " (more than 10 years; consider setting a nearer goal weight)" : "."}</p>}
-      <Field id="goal_duration_days" label="Preferred timeline" unit="days" min="14" max="3650" step="1" required={timelineNeeded} value={durationValue} onChange={setPreferredDuration} />
+      <Field id="goal_duration_days" label="Preferred timeline" unit="days" min="14" max="3650" step="1" inputMode="numeric" required={timelineNeeded} value={durationValue} onChange={setPreferredDuration} />
       <p className="mt-1 text-xs text-[#81877e]">You can choose a different timeline. If it exceeds the pace cap, FitLog will show the adjusted estimate.</p>
     </div>
     {currentWeight !== "" && goalWeight !== "" && !timelineNeeded && <p className="text-sm text-[#81877e]">No timeline is needed for a maintenance goal.</p>}
-    <button className="fit-button-primary w-full">{submitLabel}</button>
+    <FormSubmitButton pendingLabel="Saving…" className="fit-button-primary w-full">{submitLabel}</FormSubmitButton>
   </>;
 }
 
@@ -44,6 +45,6 @@ function SelectField({ id, label, defaultValue, options }: { id: string; label: 
   return <div><label htmlFor={id} className="mb-2 block text-sm font-medium">{label}</label><select id={id} name={id} required defaultValue={defaultValue} className="fit-input"><option value="" disabled>Select one</option>{options.map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></div>;
 }
 
-function Field({ id, label, unit, min, max, step, value, defaultValue, onChange, required = true }: { id: string; label: string; unit: string; min: string; max: string; step: string; value?: string; defaultValue?: string; onChange?: (value: string) => void; required?: boolean }) {
-  return <div><label htmlFor={id} className="mb-2 block text-sm font-medium">{label}</label><div className="relative"><input id={id} name={id} type="number" required={required} min={min} max={max} step={step} value={value} defaultValue={defaultValue} onChange={onChange ? (event) => onChange(event.target.value) : undefined} className="fit-input pr-16" /><span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#81877e]">{unit}</span></div></div>;
+function Field({ id, label, unit, min, max, step, value, defaultValue, onChange, required = true, inputMode }: { id: string; label: string; unit: string; min: string; max: string; step: string; value?: string; defaultValue?: string; onChange?: (value: string) => void; required?: boolean; inputMode?: "numeric" | "decimal" }) {
+  return <div><label htmlFor={id} className="mb-2 block text-sm font-medium">{label}</label><div className="relative"><input id={id} name={id} type="number" inputMode={inputMode ?? (step === "1" ? "numeric" : "decimal")} required={required} min={min} max={max} step={step} value={value} defaultValue={defaultValue} onChange={onChange ? (event) => onChange(event.target.value) : undefined} className="fit-input pr-16" /><span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#81877e]">{unit}</span></div></div>;
 }

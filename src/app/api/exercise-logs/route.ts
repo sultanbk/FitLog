@@ -19,8 +19,8 @@ function todayInAppTimezone() {
   }).format(new Date());
 }
 
-function redirectToToday(request: Request, day: string, key: string, value: string) {
-  const url = new URL("/today", request.url);
+function redirectToExercise(request: Request, day: string, key: string, value: string) {
+  const url = new URL("/exercise", request.url);
   url.searchParams.set("day", day);
   url.searchParams.set(key, value);
   return NextResponse.redirect(url, 303);
@@ -32,13 +32,13 @@ export async function POST(request: Request) {
   const today = todayInAppTimezone();
   const day = isValidExerciseLogDate(requestedDay) && requestedDay <= today ? requestedDay : today;
   if (!isValidExerciseLogDate(requestedDay) || requestedDay > today) {
-    return redirectToToday(request, day, "exerciseError", "Choose+a+valid+date+not+in+the+future");
+    return redirectToExercise(request, day, "exerciseError", "Choose+a+valid+date+not+in+the+future");
   }
 
   const action = String(form.get("action") ?? "log");
   const id = String(form.get("id") ?? "");
   if (action !== "log" && action !== "delete") {
-    return redirectToToday(request, day, "exerciseError", "Invalid+push-up+log+action");
+    return redirectToExercise(request, day, "exerciseError", "Invalid+push-up+log+action");
   }
 
   const isDemo = process.env.FITLOG_ENABLE_DEMO === "true" &&
@@ -47,12 +47,12 @@ export async function POST(request: Request) {
   if (isDemo) {
     const logs = await getDemoExerciseLogs();
     if (action === "delete" && !logs.some((log) => log.id === id && log.entry_date === day)) {
-      return redirectToToday(request, day, "exerciseError", "Could+not+find+that+push-up+log");
+      return redirectToExercise(request, day, "exerciseError", "Could+not+find+that+push-up+log");
     }
     const next = action === "delete"
       ? logs.filter((log) => log.id !== id || log.entry_date !== day)
       : createExerciseLog(logs, day, form.get("repetitions"));
-    if (!next) return redirectToToday(request, day, "exerciseError", "Enter+a+whole+number+of+push-ups+between+1+and+10000");
+    if (!next) return redirectToExercise(request, day, "exerciseError", "Enter+a+whole+number+of+push-ups+between+1+and+10000");
     const cookieStore = await cookies();
     cookieStore.set(DEMO_EXERCISE_LOGS_COOKIE, Buffer.from(JSON.stringify(next)).toString("base64url"), {
       httpOnly: true,
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
       path: "/",
       maxAge: DEMO_COOKIE_MAX_AGE,
     });
-    return redirectToToday(request, day, "exerciseSaved", "1");
+    return redirectToExercise(request, day, "exerciseSaved", "1");
   }
 
   const supabase = await createClient();
@@ -77,12 +77,12 @@ export async function POST(request: Request) {
       .select("id")
       .maybeSingle();
     const failed = Boolean(error || !data);
-    return redirectToToday(request, day, failed ? "exerciseError" : "exerciseSaved", failed ? "Could+not+delete+push-up+log" : "1");
+    return redirectToExercise(request, day, failed ? "exerciseError" : "exerciseSaved", failed ? "Could+not+delete+push-up+log" : "1");
   }
 
   const repetitions = Number(form.get("repetitions"));
   if (!isValidExerciseRepetitions(repetitions)) {
-    return redirectToToday(request, day, "exerciseError", "Enter+a+whole+number+of+push-ups+between+1+and+10000");
+    return redirectToExercise(request, day, "exerciseError", "Enter+a+whole+number+of+push-ups+between+1+and+10000");
   }
 
   const { error } = await supabase.from("exercise_logs").insert({
@@ -91,7 +91,7 @@ export async function POST(request: Request) {
     exercise: "push-ups",
     repetitions,
   });
-  return redirectToToday(request, day, error ? "exerciseError" : "exerciseSaved", error ? "Could+not+save+push-up+log" : "1");
+  return redirectToExercise(request, day, error ? "exerciseError" : "exerciseSaved", error ? "Could+not+save+push-up+log" : "1");
 }
 
 function createExerciseLog(
