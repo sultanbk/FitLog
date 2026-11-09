@@ -1,19 +1,105 @@
-/**
- * A deliberately simple, editable estimate. It assumes maintenance calories
- * of 25 kcal per kg of current body weight and uses 7,700 kcal per kg of
- * weight change. The planned weekly change is capped at 0.5 kg.
- */
-export function calculateDailyCalorieTarget(
-  currentWeightKg: number,
-  goalWeightKg: number,
-  durationDays: number,
-): number {
-  const maintenanceEstimate = 25 * currentWeightKg;
-  const weeklyChangeKg = Math.abs(goalWeightKg - currentWeightKg) / durationDays * 7;
-  const cappedWeeklyChangeKg = Math.min(weeklyChangeKg, 0.5);
-  const cappedDailyChangeKg = cappedWeeklyChangeKg / 7;
-  const direction = Math.sign(goalWeightKg - currentWeightKg);
-  const target = maintenanceEstimate - direction * cappedDailyChangeKg * 7700;
+export type SexForFormula = "female" | "male";
+export type ActivityLevel = "sedentary" | "light" | "moderate" | "active";
 
-  return Math.round(Math.max(1200, target));
+export type CaloriePlanInput = {
+  ageYears: number;
+  sex: SexForFormula;
+  activityLevel: ActivityLevel;
+  heightCm: number;
+  currentWeightKg: number;
+  goalWeightKg: number;
+  durationDays: number;
+  proteinGramsPerKg?: number;
+};
+
+export type CaloriePlan = {
+  bmrCalories: number;
+  maintenanceCalories: number;
+  requestedWeeklyChangeKg: number;
+  cappedWeeklyChangeKg: number;
+  plannedDailyChangeCalories: number;
+  dailySurplusDeficitCalories: number;
+  dailyCalorieTarget: number;
+  proteinTargetGrams: number;
+  proteinGramsPerKg: number;
+  daysAtCappedRate: number;
+  capApplied: boolean;
+  capMessage: string | null;
+  floorApplied: boolean;
+  floorMessage: string | null;
+};
+
+const ACTIVITY_MULTIPLIERS: Record<ActivityLevel, number> = {
+  sedentary: 1.2,
+  light: 1.375,
+  moderate: 1.55,
+  active: 1.725,
+};
+
+const LOSS_CALORIE_FLOOR = 1200;
+const KCAL_PER_KG = 7700;
+
+export function calculateDailyCaloriePlan(input: CaloriePlanInput): CaloriePlan {
+  const {
+    ageYears,
+    sex,
+    activityLevel,
+    heightCm,
+    currentWeightKg,
+    goalWeightKg,
+    durationDays,
+    proteinGramsPerKg = 1.5,
+  } = input;
+
+  // Mifflin-St Jeor is 10 x kg + 6.25 x cm - 5 x age, then +5 for male or -161 for female.
+  const sexAdjustment = sex === "male" ? 5 : -161;
+  const bmr = 10 * currentWeightKg + 6.25 * heightCm - 5 * ageYears + sexAdjustment;
+
+  // Maintenance is BMR multiplied by the selected activity factor.
+  const maintenanceCalories = Math.round(bmr * ACTIVITY_MULTIPLIERS[activityLevel]);
+
+  const direction = Math.sign(goalWeightKg - currentWeightKg);
+  const requestedWeeklyChangeKg = Math.abs(goalWeightKg - currentWeightKg) / durationDays * 7;
+  const weeklyCapKg = direction > 0 ? 0.5 : 0.75;
+  const cappedWeeklyChangeKg = Math.min(requestedWeeklyChangeKg, weeklyCapKg);
+  const capApplied = direction !== 0 && requestedWeeklyChangeKg > weeklyCapKg;
+
+  // A gain adds calories; a loss subtracts them; maintenance has no adjustment.
+  const signedWeeklyChangeKg = direction * cappedWeeklyChangeKg;
+  let plannedDailyChangeCalories = Math.round((signedWeeklyChangeKg * KCAL_PER_KG) / 7);
+  // Keep every positive gain goal above maintenance after whole-calorie rounding.
+  if (direction > 0 && plannedDailyChangeCalories === 0) plannedDailyChangeCalories = 1;
+  if (direction < 0 && plannedDailyChangeCalories === 0) plannedDailyChangeCalories = -1;
+  let dailyCalorieTarget = maintenanceCalories + plannedDailyChangeCalories;
+  let floorApplied = false;
+
+  // Apply the calorie floor to loss goals only. Never floor a gain or maintenance goal.
+  if (direction < 0 && dailyCalorieTarget < LOSS_CALORIE_FLOOR) {
+    dailyCalorieTarget = LOSS_CALORIE_FLOOR;
+    floorApplied = true;
+  }
+
+  const capMessage = capApplied
+    ? `The requested weekly ${direction > 0 ? "gain" : "loss"} was capped at ${weeklyCapKg} kg.`
+    : null;
+  const floorMessage = floorApplied
+    ? `The loss target was raised to the ${LOSS_CALORIE_FLOOR.toLocaleString()} kcal/day minimum.`
+    : null;
+
+  return {
+    bmrCalories: Math.round(bmr),
+    maintenanceCalories,
+    requestedWeeklyChangeKg,
+    cappedWeeklyChangeKg,
+    plannedDailyChangeCalories,
+    dailySurplusDeficitCalories: dailyCalorieTarget - maintenanceCalories,
+    dailyCalorieTarget,
+    proteinTargetGrams: Math.round(currentWeightKg * proteinGramsPerKg),
+    proteinGramsPerKg,
+    daysAtCappedRate: direction === 0 ? 0 : Math.ceil(Math.abs(goalWeightKg - currentWeightKg) / cappedWeeklyChangeKg * 7),
+    capApplied,
+    capMessage,
+    floorApplied,
+    floorMessage,
+  };
 }

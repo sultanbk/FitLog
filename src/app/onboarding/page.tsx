@@ -1,13 +1,21 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getDemoState } from "@/lib/demo-session";
 import { saveProfile } from "./actions";
 
 export default async function OnboardingPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  const { data: profile } = await supabase.from("profiles").select("id").eq("id", user.id).maybeSingle();
-  if (profile) redirect("/dashboard");
+  const isLocalDemo = process.env.NODE_ENV !== "production";
+  if (isLocalDemo) {
+    const demo = await getDemoState();
+    if (!demo.active) redirect("/login");
+    if (demo.profile) redirect("/today");
+  } else {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) redirect("/login");
+    const { data: profile } = await supabase.from("profiles").select("age_years,sex,activity_level").eq("id", user.id).maybeSingle();
+    if (profile?.age_years != null && profile.sex && profile.activity_level) redirect("/today");
+  }
   const { error } = await searchParams;
   return (
     <main className="flex min-h-screen items-center justify-center px-5 py-12">
@@ -16,16 +24,37 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
         <h1 className="mt-6 text-3xl font-semibold tracking-tight">Let’s set your starting point.</h1>
         <p className="mt-3 text-sm leading-6 text-[#697066]">These details are private to your account and help us estimate a daily calorie target.</p>
         {error && <p role="alert" className="mt-5 rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</p>}
-        <form action={saveProfile} className="mt-8 space-y-5">
-          <Field id="height_cm" label="Height" unit="cm" min="80" max="250" step="0.1" />
-          <Field id="current_weight_kg" label="Current weight" unit="kg" min="25" max="350" step="0.1" />
-          <Field id="goal_weight_kg" label="Goal weight" unit="kg" min="25" max="350" step="0.1" />
-          <Field id="goal_duration_days" label="Goal duration" unit="days" min="14" max="3650" step="1" />
-          <button className="w-full rounded-xl bg-[#315c35] px-4 py-3 font-medium text-white hover:bg-[#264b2b]">Save and see my target</button>
-        </form>
+        {isLocalDemo ? (
+          <form action="/api/demo/profile" method="post" className="mt-8 space-y-5">
+            <ProfileFields />
+          </form>
+        ) : (
+          <form action={saveProfile} className="mt-8 space-y-5">
+            <ProfileFields />
+          </form>
+        )}
       </section>
     </main>
   );
+}
+
+function ProfileFields() {
+  return <>
+    <Field id="age_years" label="Age" unit="years" min="18" max="100" step="1" />
+    <SelectField id="sex" label="Sex used for the BMR estimate" options={[["female", "Female"], ["male", "Male"]]} />
+    <SelectField id="activity_level" label="Activity level" options={[
+      ["sedentary", "Sedentary"], ["light", "Light"], ["moderate", "Moderate"], ["active", "Active"],
+    ]} />
+    <Field id="height_cm" label="Height" unit="cm" min="80" max="250" step="0.1" />
+    <Field id="current_weight_kg" label="Current weight" unit="kg" min="25" max="350" step="0.1" />
+    <Field id="goal_weight_kg" label="Goal weight" unit="kg" min="25" max="350" step="0.1" />
+    <Field id="goal_duration_days" label="Goal duration" unit="days" min="14" max="3650" step="1" />
+    <button className="w-full rounded-xl bg-[#315c35] px-4 py-3 font-medium text-white hover:bg-[#264b2b]">Save and see my target</button>
+  </>;
+}
+
+function SelectField({ id, label, options }: { id: string; label: string; options: [string, string][] }) {
+  return <div><label htmlFor={id} className="mb-2 block text-sm font-medium">{label}</label><select id={id} name={id} required defaultValue="" className="w-full rounded-xl border border-[#dfe3d9] bg-white px-4 py-3 outline-none focus:border-[#57834d]"><option value="" disabled>Select one</option>{options.map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></div>;
 }
 
 function Field({ id, label, unit, min, max, step }: { id: string; label: string; unit: string; min: string; max: string; step: string }) {

@@ -1,7 +1,23 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { DEMO_COOKIE_MAX_AGE, DEMO_PROFILE_COOKIE, DEMO_SESSION_COOKIE } from "@/lib/demo-session";
+
+export async function startDemoSession() {
+  if (process.env.NODE_ENV === "production") redirect("/login");
+  const cookieStore = await cookies();
+  cookieStore.set(DEMO_SESSION_COOKIE, "1", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: false,
+    path: "/",
+    maxAge: DEMO_COOKIE_MAX_AGE,
+  });
+  cookieStore.delete(DEMO_PROFILE_COOKIE);
+  redirect("/");
+}
 
 export async function requestLoginLink(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
