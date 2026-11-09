@@ -1,9 +1,11 @@
 import { cookies } from "next/headers";
 import type { ActivityLevel, SexForFormula } from "@/lib/calorie-target";
+import { isValidExerciseLogDate, isValidExerciseRepetitions } from "@/lib/exercise-logs";
 
 export const DEMO_SESSION_COOKIE = "fitlog_demo_session";
 export const DEMO_PROFILE_COOKIE = "fitlog_demo_profile";
 export const DEMO_WEIGH_INS_COOKIE = "fitlog_demo_weigh_ins";
+export const DEMO_EXERCISE_LOGS_COOKIE = "fitlog_demo_exercise_logs";
 export const DEMO_FOOD_ENTRIES_COOKIE = "fitlog_demo_food_entries";
 export const DEMO_FOOD_MEMORY_COOKIE = "fitlog_demo_food_memory";
 export const DEMO_QUICK_ADDS_COOKIE = "fitlog_demo_quick_adds";
@@ -25,6 +27,7 @@ export type DemoProfile = {
 };
 
 export type DemoWeighIn = { id: string; weight_kg: number; created_at: string };
+export type ExerciseLog = { id: string; entry_date: string; exercise: "push-ups"; repetitions: number; created_at: string };
 export type FoodEntry = { id: string; entry_date: string; name: string; meal: "breakfast" | "lunch" | "snack" | "dinner"; calories: number; protein_g: number; carbs_g: number; fat_g: number; is_guessed?: boolean; created_at: string };
 export type FoodMemory = { id: string; name: string; serving_description: string; calories: number; protein_g: number; carbs_g: number; fat_g: number; updated_at: string };
 export type QuickAdd = { id: string; name: string; meal: "breakfast" | "lunch" | "snack" | "dinner"; calories: number; protein_g: number; carbs_g: number; fat_g: number; is_guessed: boolean; created_at: string };
@@ -67,6 +70,27 @@ export async function getDemoWeighIns(): Promise<DemoWeighIn[]> {
       typeof entry.created_at === "string" &&
       Number.isFinite(entry.weight_kg) &&
       entry.weight_kg! >= 25 && entry.weight_kg! <= 350,
+    ).slice(0, 20);
+  } catch {
+    return [];
+  }
+}
+
+export async function getDemoExerciseLogs(): Promise<ExerciseLog[]> {
+  if (process.env.FITLOG_ENABLE_DEMO !== "true") return [];
+  const cookieStore = await cookies();
+  if (cookieStore.get(DEMO_SESSION_COOKIE)?.value !== "1") return [];
+  const encoded = cookieStore.get(DEMO_EXERCISE_LOGS_COOKIE)?.value;
+  if (!encoded) return [];
+  try {
+    const logs = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as Partial<ExerciseLog>[];
+    return logs.filter((log): log is ExerciseLog =>
+      typeof log.id === "string" &&
+      typeof log.entry_date === "string" &&
+      isValidExerciseLogDate(log.entry_date) &&
+      log.exercise === "push-ups" &&
+      isValidExerciseRepetitions(log.repetitions) &&
+      typeof log.created_at === "string",
     ).slice(0, 20);
   } catch {
     return [];

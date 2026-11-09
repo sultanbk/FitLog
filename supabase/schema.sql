@@ -23,6 +23,15 @@ create table public.weigh_ins (
   created_at timestamptz not null default now()
 );
 
+create table public.exercise_logs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  entry_date date not null,
+  exercise text not null default 'push-ups' check (exercise = 'push-ups'),
+  repetitions integer not null check (repetitions between 1 and 10000),
+  created_at timestamptz not null default now()
+);
+
 create table public.food_entries (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -71,6 +80,7 @@ create index food_memory_user_idx on public.food_memory (user_id);
 create index quick_adds_user_created_at_idx on public.quick_adds (user_id, created_at desc);
 
 create index weigh_ins_user_created_at_idx on public.weigh_ins (user_id, created_at desc);
+create index exercise_logs_user_date_created_at_idx on public.exercise_logs (user_id, entry_date, created_at desc);
 
 alter table public.profiles enable row level security;
 
@@ -88,10 +98,12 @@ create policy "Users can update their own profile"
   with check ((select auth.uid()) = id);
 
 alter table public.weigh_ins enable row level security;
+alter table public.exercise_logs enable row level security;
 alter table public.food_entries enable row level security;
 alter table public.food_memory enable row level security;
 alter table public.quick_adds enable row level security;
 grant select, insert on public.weigh_ins to authenticated;
+grant select, insert, delete on public.exercise_logs to authenticated;
 grant select, insert, update, delete on public.food_entries to authenticated;
 grant select, insert, update, delete on public.food_memory to authenticated;
 grant select, insert, delete on public.quick_adds to authenticated;
@@ -103,6 +115,16 @@ create policy "Users can view their own weigh-ins"
 create policy "Users can add their own weigh-ins"
   on public.weigh_ins for insert to authenticated
   with check ((select auth.uid()) = user_id);
+
+create policy "Users can view their own exercise logs"
+  on public.exercise_logs for select to authenticated
+  using ((select auth.uid()) = user_id);
+create policy "Users can add their own exercise logs"
+  on public.exercise_logs for insert to authenticated
+  with check ((select auth.uid()) = user_id);
+create policy "Users can delete their own exercise logs"
+  on public.exercise_logs for delete to authenticated
+  using ((select auth.uid()) = user_id);
 
 create policy "Users can view their own food entries"
   on public.food_entries for select to authenticated

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 type Food = { name: string; serving_description: string; meal: "breakfast" | "lunch" | "snack" | "dinner"; calories: number; protein_g: number; carbs_g: number; fat_g: number; is_guessed: boolean; remember: boolean };
@@ -43,10 +44,49 @@ export function NaturalLanguageLogger({ day }: { day: string }) {
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not save the food entries."); setBusy(false); }
   }
 
-  return <div className="mt-5"><form onSubmit={parse} className="space-y-3"><label htmlFor="food-log-text" className="block text-sm font-medium text-[#697066]">Describe what you ate</label><textarea id="food-log-text" required minLength={2} maxLength={5000} value={text} onChange={(event) => setText(event.target.value)} rows={3} placeholder="For example: Breakfast: 2 eggs and 2 slices of toast. Lunch: rice, dal, and a cup of curd." className="w-full resize-y rounded-xl border border-[#dfe3d9] px-3 py-3 text-sm outline-none focus:border-[#57834d]"/><button disabled={busy} className="w-full rounded-xl bg-[#315c35] px-4 py-3 font-semibold text-white disabled:opacity-60">{busy ? "Working…" : "Parse food log"}</button></form>
-    {message && <p role="alert" className="mt-3 rounded-xl bg-[#fff8e7] p-3 text-sm text-[#795b15]">{message}</p>}
-    {items.length > 0 && <section className="mt-5 border-t border-[#eef0eb] pt-5"><div><h3 className="font-semibold">Review your food entries</h3><p className="mt-1 text-xs text-[#81877e]">Check portions and nutrition before saving. Guessed values are marked.</p></div><div className="mt-3 space-y-3">{items.map((item, index) => <article key={`${index}-${item.name}`} className="rounded-2xl bg-[#f7f8f5] p-3"><div className="flex items-center justify-between"><span className="text-xs font-semibold text-[#81877e]">Entry {index + 1}</span><button type="button" aria-label={`Remove ${item.name}`} onClick={() => setItems((previous) => previous.filter((_, current) => current !== index))} className="text-xs text-red-700">Remove</button></div><label className="mt-2 block text-xs font-medium text-[#697066]">Food<input value={item.name} onChange={(event) => update(index, "name", event.target.value)} maxLength={70} className="mt-1 w-full rounded-lg border border-[#dfe3d9] bg-white px-3 py-2 text-sm"/></label><label className="mt-2 block text-xs font-medium text-[#697066]">Serving or amount<input value={item.serving_description} onChange={(event) => update(index, "serving_description", event.target.value)} maxLength={30} className="mt-1 w-full rounded-lg border border-[#dfe3d9] bg-white px-3 py-2 text-sm"/></label><div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3"><label className="text-xs text-[#697066]">Meal<select value={item.meal} onChange={(event) => update(index, "meal", event.target.value)} className="mt-1 w-full rounded-lg border border-[#dfe3d9] bg-white p-2 text-sm">{meals.map((meal) => <option key={meal} value={meal}>{meal[0].toUpperCase() + meal.slice(1)}</option>)}</select></label><NumberInput label="Calories" value={item.calories} onChange={(value) => update(index, "calories", value)} integer/><NumberInput label="Protein g" value={item.protein_g} onChange={(value) => update(index, "protein_g", value)}/><NumberInput label="Carbs g" value={item.carbs_g} onChange={(value) => update(index, "carbs_g", value)}/><NumberInput label="Fat g" value={item.fat_g} onChange={(value) => update(index, "fat_g", value)}/></div><label className="mt-3 flex items-center gap-2 text-xs text-[#795b15]"><input type="checkbox" checked={item.is_guessed} onChange={(event) => update(index, "is_guessed", event.target.checked)} /> These values are guessed or still need checking</label><label className={`mt-3 flex items-center gap-2 text-xs ${memoryEnabled && !item.is_guessed ? "text-[#315c35]" : "text-[#81877e]"}`}><input type="checkbox" checked={item.remember} disabled={!memoryEnabled || item.is_guessed} onChange={(event) => update(index, "remember", event.target.checked)} /> Remember this food and its confirmed serving/nutrition values{!memoryEnabled && <a href="/profile#food-memory" className="underline">Enable memory in Profile</a>}{memoryEnabled && item.is_guessed && <span>Uncheck guessed after verifying values</span>}</label></article>)}</div><div className="mt-3 flex gap-2"><button type="button" disabled={busy || items.length === 0} onClick={save} className="flex-1 rounded-xl bg-[#57834d] px-4 py-3 font-semibold text-white disabled:opacity-60">{busy ? "Saving…" : `Save ${items.length} ${items.length === 1 ? "entry" : "entries"}`}</button><button type="button" disabled={busy} onClick={() => setItems([])} className="rounded-xl border border-[#dfe3d9] px-4 py-3 text-sm">Clear</button></div></section>}
-  </div>;
+  return (
+    <div className="mt-5">
+      <form onSubmit={parse} className="space-y-3" aria-busy={busy}>
+        <label htmlFor="food-log-text" className="block text-sm font-medium text-[#62685f]">Describe what you ate</label>
+        <textarea id="food-log-text" required minLength={2} maxLength={5000} value={text} onChange={(event) => setText(event.target.value)} rows={3} placeholder="For example: Breakfast: 2 eggs and 2 slices of toast. Lunch: rice, dal, and a cup of curd." className="fit-input resize-y text-sm" />
+        <button disabled={busy} className="fit-button-primary w-full disabled:opacity-60">{busy ? "Working…" : "Estimate this meal"}</button>
+      </form>
+      {message && <p role="alert" className="fit-warning mt-3 p-3 text-sm">{message}</p>}
+      {items.length > 0 && (
+        <section className="mt-5 border-t border-[#efede7] pt-5">
+          <div>
+            <h3 className="text-xl">Review before saving</h3>
+            <p className="mt-1 text-sm leading-6 text-[#7b8077]">Check portions and nutrition. Nothing is saved until you confirm these entries.</p>
+          </div>
+          <div className="mt-4 space-y-3">
+            {items.map((item, index) => (
+              <article key={`${index}-${item.name}`} className="rounded-xl border border-[#e6e3da] bg-[#faf9f5] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-[#7b8077]">Entry {index + 1}</span>
+                  <button type="button" aria-label={`Remove ${item.name}`} onClick={() => setItems((previous) => previous.filter((_, current) => current !== index))} className="rounded-md px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50">Remove</button>
+                </div>
+                <label className="mt-3 block text-xs font-medium text-[#62685f]">Food<input value={item.name} onChange={(event) => update(index, "name", event.target.value)} maxLength={70} className="fit-input mt-1 text-sm" /></label>
+                <label className="mt-3 block text-xs font-medium text-[#62685f]">Serving or amount<input value={item.serving_description} onChange={(event) => update(index, "serving_description", event.target.value)} maxLength={30} className="fit-input mt-1 text-sm" /></label>
+                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  <label className="text-xs text-[#62685f]">Meal<select value={item.meal} onChange={(event) => update(index, "meal", event.target.value)} className="fit-input mt-1 text-sm">{meals.map((meal) => <option key={meal} value={meal}>{meal[0].toUpperCase() + meal.slice(1)}</option>)}</select></label>
+                  <NumberInput label="Calories" value={item.calories} onChange={(value) => update(index, "calories", value)} integer />
+                  <NumberInput label="Protein g" value={item.protein_g} onChange={(value) => update(index, "protein_g", value)} />
+                  <NumberInput label="Carbs g" value={item.carbs_g} onChange={(value) => update(index, "carbs_g", value)} />
+                  <NumberInput label="Fat g" value={item.fat_g} onChange={(value) => update(index, "fat_g", value)} />
+                </div>
+                <label className="mt-4 flex items-start gap-2 text-xs leading-5 text-[#76591e]"><input type="checkbox" checked={item.is_guessed} onChange={(event) => update(index, "is_guessed", event.target.checked)} /> These values are guessed or still need checking</label>
+                <label className={`mt-3 flex items-start gap-2 text-xs leading-5 ${memoryEnabled && !item.is_guessed ? "text-[#3e5944]" : "text-[#7b8077]"}`}><input type="checkbox" checked={item.remember} disabled={!memoryEnabled || item.is_guessed} onChange={(event) => update(index, "remember", event.target.checked)} /> Remember this food and its confirmed serving/nutrition values{!memoryEnabled && <Link href="/profile#food-memory" className="underline">Enable memory in Profile</Link>}{memoryEnabled && item.is_guessed && <span>Uncheck guessed after verifying values</span>}</label>
+              </article>
+            ))}
+          </div>
+          <div className="mt-4 flex gap-2">
+            <button type="button" disabled={busy || items.length === 0} onClick={save} className="fit-button-primary flex-1 disabled:opacity-60">{busy ? "Saving…" : `Save ${items.length} ${items.length === 1 ? "entry" : "entries"}`}</button>
+            <button type="button" disabled={busy} onClick={() => setItems([])} className="rounded-lg border border-[#d9d7cd] bg-[#fffefa] px-4 py-3 text-sm text-[#62685f]">Clear</button>
+          </div>
+        </section>
+      )}
+    </div>
+  );
 }
 
-function NumberInput({ label, value, onChange, integer }: { label: string; value: number; onChange: (value: string) => void; integer?: boolean }) { return <label className="text-xs text-[#697066]">{label}<input type="number" min="0" max={integer ? 20000 : 1000} step={integer ? 1 : "0.1"} value={value} onChange={(event) => onChange(event.target.value)} className="mt-1 w-full rounded-lg border border-[#dfe3d9] bg-white p-2 text-sm"/></label>; }
+function NumberInput({ label, value, onChange, integer }: { label: string; value: number; onChange: (value: string) => void; integer?: boolean }) { return <label className="text-xs text-[#62685f]">{label}<input type="number" min="0" max={integer ? 20000 : 1000} step={integer ? 1 : "0.1"} value={value} onChange={(event) => onChange(event.target.value)} className="fit-input mt-1 text-sm" /></label>; }

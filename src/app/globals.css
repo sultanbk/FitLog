@@ -1,6 +1,128 @@
 @import "tailwindcss";
 
-:root { color-scheme: light; }
+:root {
+  color-scheme: light;
+  --fit-canvas: #f6f4ef;
+  --fit-surface: #fffefa;
+  --fit-surface-soft: #eeeee5;
+  --fit-ink: #252922;
+  --fit-muted: #62685f;
+  --fit-muted-soft: #7b8077;
+  --fit-sage: #3e5944;
+  --fit-sage-hover: #304837;
+  --fit-sage-bright: #71856a;
+  --fit-border: #e6e3da;
+  --fit-border-soft: #efede7;
+  --fit-warning-bg: #fbf3e2;
+  --fit-warning-ink: #76591e;
+  --fit-danger: #a14136;
+}
+
 * { box-sizing: border-box; }
-body { margin: 0; background: #f7f8f5; color: #20251f; font-family: Arial, Helvetica, sans-serif; }
-button, input { font: inherit; }
+html { background: var(--fit-canvas); }
+body {
+  margin: 0;
+  background: var(--fit-canvas);
+  color: var(--fit-ink);
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, textarea, select { font: inherit; }
+:focus-visible { outline: 3px solid #8ab47e; outline-offset: 2px; }
+h1, h2, h3 { font-family: Georgia, "Times New Roman", serif; font-weight: 500; letter-spacing: -.035em; }
+button, a, summary { -webkit-tap-highlight-color: transparent; }
+
+.fit-app { min-height: 100vh; background: var(--fit-canvas); }
+.fit-sidebar {
+  display: none;
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 30;
+  width: 16rem;
+  padding: 2.25rem 1.25rem 1.5rem;
+  border-right: 1px solid var(--fit-border);
+  background: #f8f6f1;
+}
+.fit-brand { color: var(--fit-ink); font-size: 1.3rem; font-weight: 700; letter-spacing: -.06em; text-decoration: none; }
+.fit-brand span { color: var(--fit-sage-bright); }
+.fit-sidebar-caption { margin: 2.5rem 0 .75rem .75rem; color: var(--fit-muted-soft); font-size: .68rem; font-weight: 700; letter-spacing: .12em; }
+.fit-sidebar-nav { display: grid; gap: .35rem; }
+.fit-nav-link {
+  display: flex;
+  align-items: center;
+  gap: .8rem;
+  min-height: 2.9rem;
+  padding: .7rem .8rem;
+  border-radius: .7rem;
+  color: var(--fit-muted);
+  font-size: .93rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color .15s ease, color .15s ease;
+}
+.fit-nav-link:hover, .fit-nav-link.is-active { background: var(--fit-surface-soft); color: var(--fit-sage); }
+.fit-nav-dot { width: .5rem; height: .5rem; border-radius: 999px; background: var(--fit-border); }
+.fit-nav-link.is-active .fit-nav-dot { background: var(--fit-sage-bright); }
+.fit-sidebar-note { position: absolute; right: 1.25rem; bottom: 1.5rem; left: 1.25rem; margin: 0; padding: 1rem; border-radius: 1rem; background: var(--fit-canvas); color: var(--fit-muted); font-size: .78rem; line-height: 1.5; }
+.fit-mobile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1rem 0;
+}
+.fit-signout-button { min-height: 2.6rem; border: 0; background: transparent; color: var(--fit-muted); font-size: .85rem; font-weight: 600; cursor: pointer; }
+.fit-mobile-profile { padding: .55rem .9rem; border: 1px solid var(--fit-border); border-radius: 999px; background: var(--fit-surface); color: var(--fit-muted); font-size: .82rem; font-weight: 600; text-decoration: none; }
+.fit-main { min-width: 0; padding: 1.75rem 1rem 7rem; }
+.fit-content { width: 100%; max-width: 70rem; margin-inline: auto; }
+.fit-card { border: 1px solid var(--fit-border); border-radius: 1.15rem; background: var(--fit-surface); padding: 1.25rem; box-shadow: 0 8px 26px rgb(47 48 36 / 3%); }
+.fit-card-lite { border: 1px solid var(--fit-border); border-radius: .9rem; background: var(--fit-surface); }
+.fit-card-muted { border-radius: .8rem; background: var(--fit-canvas); }
+.fit-input {
+  width: 100%;
+  min-height: 2.9rem;
+  border: 1px solid #d9d7cd;
+  border-radius: .65rem;
+  background: var(--fit-surface);
+  padding: .75rem .9rem;
+  color: var(--fit-ink);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.fit-input:focus { border-color: var(--fit-sage-bright); outline: none; box-shadow: 0 0 0 3px rgb(87 131 77 / 14%); }
+.fit-button-primary {
+  min-height: 2.9rem;
+  border: 0;
+  border-radius: .65rem;
+  background: var(--fit-sage);
+  padding: .75rem 1rem;
+  color: white;
+  font-weight: 650;
+  transition: background-color .15s ease, transform .15s ease;
+}
+.fit-button-primary:hover { background: var(--fit-sage-hover); }
+.fit-button-primary:active { transform: translateY(1px); }
+.fit-button-primary:disabled { cursor: wait; opacity: .6; }
+.fit-muted { color: var(--fit-muted-soft); }
+.fit-warning { border-radius: .75rem; background: var(--fit-warning-bg); color: var(--fit-warning-ink); }
+.fit-eyebrow { color: var(--fit-sage-bright); font-size: .7rem; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; }
+.fit-heading { margin-top: .5rem; font-family: Georgia, "Times New Roman", serif; font-size: clamp(2rem, 4vw, 2.75rem); line-height: 1.1; letter-spacing: -.045em; }
+.fit-bottom-nav { border-color: var(--fit-border); background: rgb(255 254 250 / 94%); }
+.fit-progress-track { height: .45rem; overflow: hidden; border-radius: 999px; background: #eeece4; }
+.fit-progress-fill { height: 100%; border-radius: inherit; background: var(--fit-sage-bright); transition: width .35s ease; }
+.fit-entry-action { color: var(--fit-sage); transition: background-color .15s ease; }
+.fit-entry-action:hover { background: var(--fit-surface-soft); }
+.fit-auth-panel { border: 1px solid var(--fit-border); border-radius: 1.25rem; background: var(--fit-surface); box-shadow: 0 18px 60px rgb(47 48 36 / 6%); }
+.fit-auth-aside { background: #e9ebe1; }
+
+@media (min-width: 640px) {
+  .fit-mobile-header { padding-right: 1.5rem; padding-left: 1.5rem; }
+  .fit-main { padding: 2.25rem 1.5rem 7rem; }
+  .fit-card { padding: 1.75rem; }
+}
+@media (min-width: 1024px) {
+  .fit-sidebar { display: block; }
+  .fit-mobile-header { display: none; }
+  .fit-main { min-height: 100vh; margin-left: 16rem; padding: 3rem clamp(2.5rem, 5vw, 5rem); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+}

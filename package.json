@@ -7,7 +7,7 @@
                     "build":  "next build",
                     "start":  "next start",
                     "lint":  "eslint",
-                    "test":  "node --experimental-strip-types --test tests/calorie-target.test.mjs",
+                    "test":  "node --experimental-strip-types --test tests/calorie-target.test.mjs tests/exercise-logs.test.mjs tests/progress-analytics.test.mjs",
                     "provision:users":  "node scripts/provision-users.mjs"
                 },
     "dependencies":  {
