@@ -49,7 +49,7 @@ export function WeeklyReflectionCard({ enabled }: { enabled: boolean }) {
       </p>
       {!enabled ? (
         <p className="mt-4 rounded-xl bg-[#f5f7f2] p-4 text-sm leading-6 text-[#62685f]">
-          This is off by default. You can enable weekly reflections in <a className="font-semibold text-[#3e5944] underline" href="/profile#ai-food">Profile → AI food tools</a>.
+          Add a Gemini API key in <a className="font-semibold text-[#3e5944] underline" href="/settings#gemini-key">Settings</a> to activate weekly reflections.
         </p>
       ) : (
         <>

@@ -134,7 +134,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
       </section>
 
       <Link href="/settings" className="mt-4 flex items-center justify-between rounded-2xl border border-[#e6e3da] bg-[#fffefa] p-5 text-sm transition-colors hover:bg-[#f5f7f2]">
-        <span><span className="block font-semibold text-[#35483a]">Preferences, AI privacy & account</span><span className="mt-1 block text-[#7b8077]">Manage feature consent, your Gemini key, password, and data.</span></span>
+        <span><span className="block font-semibold text-[#35483a]">Preferences, AI privacy & account</span><span className="mt-1 block text-[#7b8077]">Manage your Gemini key, password, and data.</span></span>
         <span aria-hidden="true" className="ml-4 text-lg text-[#697066]">→</span>
       </Link>
       <p className="mt-6 text-center text-xs leading-5 text-[#81877e]">Calorie and protein targets are estimates, not medical advice.</p>

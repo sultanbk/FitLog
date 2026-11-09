@@ -13,18 +13,12 @@ import { createClient } from "@/lib/supabase/server";
 type SettingsProfile = {
   protein_g_per_kg?: number;
   food_memory_enabled?: boolean;
-  gemini_food_parsing_enabled?: boolean;
-  gemini_weekly_reflections_enabled?: boolean;
-  gemini_meal_ideas_enabled?: boolean;
 };
 
 type SettingsParams = {
   saved?: string;
   settingsError?: string;
   memoryMessage?: string;
-  gemini?: string;
-  reflection?: string;
-  mealIdeas?: string;
   passwordSaved?: string;
   passwordError?: string;
   clearDataError?: string;
@@ -50,7 +44,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) redirect("/login");
     const { data, error } = await supabase.from("profiles")
-      .select("protein_g_per_kg,food_memory_enabled,gemini_food_parsing_enabled,gemini_weekly_reflections_enabled,gemini_meal_ideas_enabled")
+      .select("protein_g_per_kg,food_memory_enabled")
       .eq("id", user.id)
       .maybeSingle();
     if (error) {
@@ -81,9 +75,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
   if (!profile) redirect("/onboarding");
   const proteinRatio = Number(profile.protein_g_per_kg ?? 1.5);
-  const geminiEnabled = profile.gemini_food_parsing_enabled === true;
-  const reflectionEnabled = profile.gemini_weekly_reflections_enabled === true;
-  const mealIdeasEnabled = profile.gemini_meal_ideas_enabled === true;
   const memoryEnabled = profile.food_memory_enabled === true;
   const signOutAction = localDemo ? "/api/demo/logout" : "/api/auth/logout";
   const signOut = <form action={signOutAction} method="post" data-clear-drafts-on-submit="true"><button data-pending-label="Signing out…" className="fit-signout-button">Sign out</button></form>;
@@ -124,7 +115,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <div className="mb-4">
           <p className="fit-eyebrow">Optional tools</p>
           <h2 id="ai-title" className="text-2xl">AI & privacy</h2>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-[#7b8077]">Each Gemini feature is independently opt-in. You can turn any feature off here.</p>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-[#7b8077]">Gemini features are ready whenever a personal or shared API key is configured. Adding your own key activates them automatically. Nothing is sent until you choose a Gemini feature.</p>
         </div>
 
         <GeminiKeyManager
@@ -141,34 +132,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </p>
         )}
 
-        <div className="fit-card mt-4 space-y-5">
-          <ConsentSetting
-            title="Gemini food parsing"
-            description="Describe a meal and Gemini will estimate its nutrition. Review and edit every item before saving. Your food description is sent to Google; Google’s unpaid API tier may use submitted content to improve Google services and may allow human review."
-            enabled={geminiEnabled}
-            result={params.gemini}
-            enabledMessage="Gemini food parsing is on."
-            disabledMessage="Gemini food parsing is off."
-            feature="food-parsing"
-          />
-          <ConsentSetting
-            title="Weekly reflections"
-            description="When requested, FitLog sends only seven-day totals and weekday logging counts—not food names, individual entries, or weight. Reflections are never generated automatically. Google’s unpaid API tier may use submitted summaries to improve its services and may allow human review."
-            enabled={reflectionEnabled}
-            result={params.reflection}
-            enabledMessage="Weekly reflections are on."
-            disabledMessage="Weekly reflections are off."
-            feature="weekly-reflections"
-          />
-          <ConsentSetting
-            title="Meal ideas"
-            description="When requested, Gemini receives your remaining calorie/protein estimates and up to eight saved favorite names as inspiration. Individual logged foods are not sent, and suggestions are never saved automatically. Nutrition is estimated."
-            enabled={mealIdeasEnabled}
-            result={params.mealIdeas}
-            enabledMessage="Gemini meal ideas are on."
-            disabledMessage="Gemini meal ideas are off."
-            feature="meal-ideas"
-          />
+        <div className="fit-card mt-4 space-y-3">
+          <h3 className="text-sm font-semibold text-[#35483a]">What is shared when you use a Gemini feature</h3>
+          <ul className="space-y-2 pl-5 text-sm leading-6 text-[#697066] marker:text-[#71856a]">
+            <li>Food parsing sends the description you enter and, if enabled, matching saved food memories. Review and edit the estimate before it is saved.</li>
+            <li>Meal ideas sends today’s calorie and protein totals plus up to eight saved favorite names. It does not send individual food entries.</li>
+            <li>Weekly reflections sends calculated seven-day totals and weekday logging counts, not food names, individual entries, or weight.</li>
+          </ul>
+          <p className="text-xs leading-5 text-[#7b8077]">Each feature runs only when you request it. Google’s API terms and data policies apply to these requests, including possible use for service improvement or human review on unpaid tiers. Remove your personal key here to return to the shared key, if configured.</p>
         </div>
       </section>
 
@@ -264,41 +235,6 @@ function SectionHeading({ id, title, description }: { id: string; title: string;
   return <div>
     <h2 id={id} className="text-xl">{title}</h2>
     <p className="mt-1 max-w-2xl text-sm leading-6 text-[#7b8077]">{description}</p>
-  </div>;
-}
-
-function ConsentSetting({
-  title,
-  description,
-  enabled,
-  result,
-  enabledMessage,
-  disabledMessage,
-  feature,
-}: {
-  title: string;
-  description: string;
-  enabled: boolean;
-  result?: string;
-  enabledMessage: string;
-  disabledMessage: string;
-  feature: string;
-}) {
-  const status = result === "enabled" ? enabledMessage : result === "disabled" ? disabledMessage : result === "error" ? "Could not update this setting." : null;
-  return <div className="border-b border-[#efede7] pb-5 last:border-0 last:pb-0">
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h3 className="text-sm font-semibold text-[#35483a]">{title}</h3>
-        <p className="mt-1 max-w-3xl text-sm leading-6 text-[#697066]">{description}</p>
-      </div>
-      <span className={enabled ? "rounded-full bg-[#edf5e9] px-3 py-1 text-xs font-semibold text-[#315c35]" : "rounded-full bg-[#f1f2ef] px-3 py-1 text-xs font-semibold text-[#697066]"}>{enabled ? "On" : "Off"}</span>
-    </div>
-    {status && <p role={result === "error" ? "alert" : "status"} className={result === "error" ? "mt-3 text-sm text-red-700" : "mt-3 text-sm text-[#315c35]"}>{status}</p>}
-    <form action="/api/profile/ai-consent" method="post" className="mt-3">
-      <input type="hidden" name="feature" value={feature} />
-      <input type="hidden" name="enabled" value={enabled ? "false" : "true"} />
-      <button className="fit-button-primary">{enabled ? "Turn off" : "Turn on"} {title.toLowerCase()}</button>
-    </form>
   </div>;
 }
 

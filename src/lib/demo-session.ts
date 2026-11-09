@@ -23,9 +23,6 @@ export type DemoProfile = {
   daily_calorie_target?: number;
   maintenance_calories?: number;
   food_memory_enabled?: boolean;
-  gemini_food_parsing_enabled?: boolean;
-  gemini_weekly_reflections_enabled?: boolean;
-  gemini_meal_ideas_enabled?: boolean;
 };
 
 export type DemoWeighIn = { id: string; weight_kg: number; created_at: string };
@@ -52,7 +49,7 @@ export async function getDemoState(): Promise<{ active: boolean; profile: DemoPr
         !["sedentary", "light", "moderate", "active"].includes(value.activity_level ?? "")) {
       return { active, profile: null };
     }
-    return { active, profile: { protein_g_per_kg: 1.5, food_memory_enabled: false, gemini_food_parsing_enabled: false, gemini_weekly_reflections_enabled: false, gemini_meal_ideas_enabled: false, ...value } as DemoProfile };
+    return { active, profile: { protein_g_per_kg: 1.5, food_memory_enabled: false, ...value } as DemoProfile };
   } catch {
     return { active, profile: null };
   }

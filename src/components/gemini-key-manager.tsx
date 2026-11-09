@@ -31,7 +31,7 @@ export function GeminiKeyManager({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 id="gemini-key-title" className="text-xl">Your Gemini API key</h2>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-[#7b8077]">Add your own key from Google AI Studio. It will be used for food parsing, meal ideas, and weekly reflections instead of the shared server key.</p>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-[#7b8077]">Add your own key from Google AI Studio. Saving it activates food parsing, meal ideas, and weekly reflections, and uses your key instead of the shared server key.</p>
         </div>
         <span className={isConfigured ? "rounded-full bg-[#edf5e9] px-3 py-1 text-xs font-semibold text-[#315c35]" : "rounded-full bg-[#f1f2ef] px-3 py-1 text-xs font-semibold text-[#697066]"}>
           {isConfigured ? "Personal key saved" : sharedKeyAvailable ? "Using shared key" : "No key configured"}
@@ -39,7 +39,7 @@ export function GeminiKeyManager({
       </div>
 
       <p className="mt-4 rounded-2xl bg-[#f5f7f2] p-4 text-sm leading-6 text-[#697066]">
-        Your key is encrypted on the server before it is stored. It is never shown again or sent to your browser, and can be removed here. It is checked the next time you use a Gemini feature. Google applies your key’s quota, billing, and data policies to those requests.
+        Your key is encrypted on the server before it is stored. It is never shown again or sent to your browser, and can be removed here. Gemini features run only when you choose to use them; Google applies your key’s quota, billing, and data policies to those requests.
       </p>
       {demo && <p role="status" className="mt-3 text-sm text-[#697066]">Personal keys are disabled in demo mode. Use FitLog’s server-configured key there.</p>}
       {!demo && keyStoreReady && !encryptionConfigured && (

@@ -6,7 +6,7 @@ import { useState } from "react";
 type Food = { name: string; serving_description: string; meal: "breakfast" | "lunch" | "snack" | "dinner"; calories: number; protein_g: number; carbs_g: number; fat_g: number; is_guessed: boolean; remember: boolean };
 const meals = ["breakfast", "lunch", "snack", "dinner"] as const;
 
-export function NaturalLanguageLogger({ day }: { day: string }) {
+export function NaturalLanguageLogger({ day, enabled }: { day: string; enabled: boolean }) {
   const [text, setText] = useState("");
   const [items, setItems] = useState<Food[]>([]);
   const [message, setMessage] = useState("");
@@ -66,20 +66,27 @@ export function NaturalLanguageLogger({ day }: { day: string }) {
       const response = await fetch("/api/food-entries/batch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ entry_date: day, items }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not save the food entries. Please try again.");
-      const warning = result.memoryWarning ? `&memoryWarning=${encodeURIComponent(result.memoryWarning)}` : "";
+      const notice = new URLSearchParams({ day, saved: "1", notice: "food-added" });
+      if (result.memoryWarning) notice.set("memoryWarning", result.memoryWarning);
       sessionStorage.removeItem(`fitlog-form-draft:food-description:${day}`);
-      window.location.assign(`/today?day=${encodeURIComponent(day)}&saved=1${warning}`);
+      window.location.assign(`/today?${notice.toString()}`);
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not save the food entries."); setBusy(false); }
   }
 
   return (
     <div className="mt-5">
+      {!enabled ? (
+        <p className="rounded-xl bg-[#f5f7f2] p-4 text-sm leading-6 text-[#62685f]">
+          Add a personal Gemini API key in <Link className="font-semibold text-[#3e5944] underline" href="/settings#gemini-key">Settings</Link> to enable food estimates. You can still add food manually below.
+        </p>
+      ) : (
       <form onSubmit={parse} data-draft-key={`food-description:${day}`} className="space-y-3" aria-busy={busy}>
         <p data-draft-status className="text-xs text-[#7b8077]">Your unfinished description is saved only in this browser tab.</p>
         <label htmlFor="food-log-text" className="block text-sm font-medium text-[#62685f]">Describe what you ate</label>
-        <textarea id="food-log-text" name="food_description" data-draft-field required minLength={2} maxLength={5000} value={text} onChange={(event) => setText(event.target.value)} rows={3} placeholder="For example: Breakfast: 2 eggs and 2 slices of toast. Lunch: rice, dal, and a cup of curd." className="fit-input resize-y text-sm" />
-        <button disabled={busy} className="fit-button-primary w-full disabled:opacity-60">{busy ? "Working…" : "Estimate this meal"}</button>
+        <textarea id="food-log-text" name="food_description" data-draft-field required minLength={2} maxLength={5000} value={text} onChange={(event) => setText(event.target.value)} rows={4} placeholder="For example: Breakfast: 2 eggs and 2 slices of toast. Lunch: rice, dal, and a cup of curd." className="fit-input resize-y text-sm" />
+        <button disabled={busy} className="fit-button-primary min-h-12 w-full disabled:opacity-60">{busy ? "Working…" : "Estimate this meal"}</button>
       </form>
+      )}
       {message && <p role="alert" className="fit-warning mt-3 p-3 text-sm">{message}</p>}
       {items.length > 0 && (
         <section className="mt-5 border-t border-[#efede7] pt-5">
@@ -111,17 +118,17 @@ export function NaturalLanguageLogger({ day }: { day: string }) {
               <form onSubmit={answerClarification} className="mt-4 rounded-xl border border-[#e6e3da] bg-[#f5f7f2] p-4" aria-busy={busy}>
                 <label htmlFor="food-portion-answer" className="block text-sm font-semibold text-[#35483a]">{clarificationQuestion}</label>
                 <p className="mt-1 text-xs leading-5 text-[#7b8077]">One quick detail helps make the estimate more useful. You can also skip this and review a clearly marked estimate.</p>
-                <input id="food-portion-answer" name="portion_answer" maxLength={250} autoComplete="off" placeholder="e.g. about 1 cup, medium bowl" className="fit-input mt-3 text-sm" disabled={busy} />
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button disabled={busy} className="fit-button-primary disabled:opacity-60">{busy ? "Updating estimate…" : "Continue with this portion"}</button>
-                  <button type="button" disabled={busy} onClick={() => runParse("I’m not sure; use a clearly marked estimate.")} className="rounded-lg border border-[#d9d7cd] bg-[#fffefa] px-4 py-2 text-sm text-[#62685f] disabled:opacity-60">Estimate it instead</button>
+                <input id="food-portion-answer" name="portion_answer" maxLength={250} autoComplete="off" enterKeyHint="done" placeholder="e.g. about 1 cup, medium bowl" className="fit-input mt-3 text-sm" disabled={busy} />
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <button disabled={busy} className="fit-button-primary min-h-12 w-full sm:w-auto disabled:opacity-60">{busy ? "Updating estimate…" : "Continue with this portion"}</button>
+                  <button type="button" disabled={busy} onClick={() => runParse("I’m not sure; use a clearly marked estimate.")} className="min-h-12 w-full rounded-lg border border-[#d9d7cd] bg-[#fffefa] px-4 py-2 text-sm text-[#62685f] disabled:opacity-60 sm:w-auto">Estimate it instead</button>
                 </div>
               </form>
             )}
           </div>
-          <div className="mt-4 flex gap-2">
-            <button type="button" disabled={busy || items.length === 0} onClick={save} className="fit-button-primary flex-1 disabled:opacity-60">{busy ? "Saving…" : `Save ${items.length} ${items.length === 1 ? "entry" : "entries"}`}</button>
-            <button type="button" disabled={busy} onClick={() => setItems([])} className="rounded-lg border border-[#d9d7cd] bg-[#fffefa] px-4 py-3 text-sm text-[#62685f]">Clear</button>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+            <button type="button" disabled={busy || items.length === 0} onClick={save} className="fit-button-primary min-h-12 w-full flex-1 disabled:opacity-60">{busy ? "Saving…" : `Save ${items.length} ${items.length === 1 ? "entry" : "entries"}`}</button>
+            <button type="button" disabled={busy} onClick={() => setItems([])} className="min-h-12 w-full rounded-lg border border-[#d9d7cd] bg-[#fffefa] px-4 py-3 text-sm text-[#62685f] sm:w-auto">Clear review</button>
           </div>
         </section>
       )}
@@ -129,4 +136,4 @@ export function NaturalLanguageLogger({ day }: { day: string }) {
   );
 }
 
-function NumberInput({ label, value, onChange, integer }: { label: string; value: number; onChange: (value: string) => void; integer?: boolean }) { return <label className="text-xs text-[#62685f]">{label}<input type="number" min="0" max={integer ? 20000 : 1000} step={integer ? 1 : "0.1"} value={value} onChange={(event) => onChange(event.target.value)} className="fit-input mt-1 text-sm" /></label>; }
+function NumberInput({ label, value, onChange, integer }: { label: string; value: number; onChange: (value: string) => void; integer?: boolean }) { return <label className="text-xs text-[#62685f]">{label}<input type="number" inputMode={integer ? "numeric" : "decimal"} enterKeyHint="done" min="0" max={integer ? 20000 : 1000} step={integer ? 1 : "0.1"} value={value} onChange={(event) => onChange(event.target.value)} className="fit-input mt-1 text-sm" /></label>; }

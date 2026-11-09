@@ -43,10 +43,18 @@ export default async function ExercisePage({ searchParams }: { searchParams: Pro
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) redirect("/login");
 
-    const { data: profile, error: profileError } = await supabase.from("profiles")
-      .select("age_years")
-      .eq("id", user.id)
-      .maybeSingle();
+    const [profileResult, logsResult] = await Promise.all([
+      supabase.from("profiles")
+        .select("age_years")
+        .eq("id", user.id)
+        .maybeSingle(),
+      supabase.from("exercise_logs")
+        .select("id,entry_date,exercise,repetitions,created_at")
+        .eq("user_id", user.id)
+        .eq("entry_date", day)
+        .order("created_at", { ascending: false }),
+    ]);
+    const { data: profile, error: profileError } = profileResult;
     if (profileError) {
       const setupIssue = getDatabaseSetupIssue(profileError);
       if (setupIssue) return <DatabaseSetupNotice active="exercise" issue={setupIssue} />;
@@ -54,11 +62,7 @@ export default async function ExercisePage({ searchParams }: { searchParams: Pro
     }
     if (!profile?.age_years) redirect("/onboarding");
 
-    const { data, error } = await supabase.from("exercise_logs")
-      .select("id,entry_date,exercise,repetitions,created_at")
-      .eq("user_id", user.id)
-      .eq("entry_date", day)
-      .order("created_at", { ascending: false });
+    const { data, error } = logsResult;
     if (error) {
       const setupIssue = getDatabaseSetupIssue(error);
       if (setupIssue) return <DatabaseSetupNotice active="exercise" issue={setupIssue} />;
@@ -113,10 +117,10 @@ export default async function ExercisePage({ searchParams }: { searchParams: Pro
         <p data-draft-status className="mt-4 text-xs text-[#7b8077]">An unfinished set is saved only in this browser tab.</p>
         <form action="/api/exercise-logs" method="post" data-draft-key={`exercise-set:${day}`} className="mt-2 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
           <input type="hidden" name="entry_date" value={day} />
-          <label className="block text-sm font-medium text-[#62685f]">Repetitions
-            <input className="fit-input mt-1.5" name="repetitions" type="number" required min="1" max="10000" step="1" inputMode="numeric" placeholder="e.g. 10" />
+          <label className="block text-sm font-medium text-[#62685f]">Repetitions in this set
+            <input className="fit-input mt-1.5" name="repetitions" type="number" required min="1" max="10000" step="1" inputMode="numeric" enterKeyHint="done" autoComplete="off" placeholder="e.g. 10" />
           </label>
-          <button data-pending-label="Logging…" className="fit-button-primary w-full sm:w-auto sm:min-w-36">Log push-ups</button>
+          <button data-pending-label="Logging…" className="fit-button-primary min-h-12 w-full sm:w-auto sm:min-w-36">Log push-ups</button>
         </form>
 
         {dayLogs.length > 0 ? (

@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { resolveGeminiApiKey } from "../src/lib/gemini-api-key.ts";
+import { hasGeminiKey, resolveGeminiApiKey } from "../src/lib/gemini-api-key.ts";
 import { decryptGeminiKey, encryptGeminiKey } from "../src/lib/gemini-key-crypto.ts";
 
 const secret = "78".repeat(32);
+
+test("Gemini activates for a personal or shared key and stays unavailable without either", () => {
+  assert.equal(hasGeminiKey(true, undefined), true);
+  assert.equal(hasGeminiKey(false, "shared-key"), true);
+  assert.equal(hasGeminiKey(false, undefined), false);
+});
 
 async function withGeminiEnvironment(values, callback) {
   const previous = Object.fromEntries(Object.keys(values).map((key) => [key, process.env[key]]));

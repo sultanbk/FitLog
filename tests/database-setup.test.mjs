@@ -22,26 +22,15 @@ test("missing food memory setup lists its migrations in order", () => {
   });
 });
 
-test("missing weekly reflection consent points to its migration", () => {
-  assert.deepEqual(getDatabaseSetupIssue({
+test("legacy Gemini feature toggle columns are no longer required", () => {
+  assert.equal(getDatabaseSetupIssue({
     code: "42703",
     message: 'column profiles.gemini_weekly_reflections_enabled does not exist',
-  }), {
-    table: "profiles",
-    column: "gemini_weekly_reflections_enabled",
-    migrations: ["20261110000300_weekly_reflection_consent.sql"],
-  });
-});
-
-test("missing meal ideas consent points to its migration", () => {
-  assert.deepEqual(getDatabaseSetupIssue({
+  }), null);
+  assert.equal(getDatabaseSetupIssue({
     code: "42703",
     message: 'column profiles.gemini_meal_ideas_enabled does not exist',
-  }), {
-    table: "profiles",
-    column: "gemini_meal_ideas_enabled",
-    migrations: ["20261110000400_gemini_meal_ideas_consent.sql"],
-  });
+  }), null);
 });
 
 test("missing personal Gemini key RPC points to its migration", () => {

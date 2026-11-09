@@ -6,6 +6,10 @@ export type GeminiKeyResult =
   | { apiKey: null; source: "missing" }
   | { apiKey: null; error: "lookup" | "decrypt" };
 
+export function hasGeminiKey(hasPersonalKey: boolean, sharedKey: string | undefined) {
+  return hasPersonalKey || Boolean(sharedKey);
+}
+
 export async function resolveGeminiApiKey(supabase: SupabaseClient, userId: string): Promise<GeminiKeyResult> {
   const { data: encryptedKey, error } = await supabase.rpc("get_my_gemini_key");
   if (error) return { apiKey: null, error: "lookup" };

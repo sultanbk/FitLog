@@ -54,9 +54,6 @@ export async function POST(request: Request) {
   if (process.env.FITLOG_ENABLE_DEMO === "true") {
     const demo = await getDemoState();
     if (!demo.active || !demo.profile) return NextResponse.json({ error: "Please sign in first." }, { status: 401 });
-    if (demo.profile.gemini_meal_ideas_enabled !== true) {
-      return NextResponse.json({ error: "Turn on Gemini meal ideas in Profile before sending today’s nutrition summary to Google." }, { status: 403 });
-    }
     const [foodEntries, quickAdds] = await Promise.all([getDemoFoodEntries(), getDemoQuickAdds()]);
     calorieTarget = Number(demo.profile.daily_calorie_target ?? 2000);
     proteinTarget = Math.round(demo.profile.current_weight_kg * Number(demo.profile.protein_g_per_kg ?? 1.5));
@@ -68,16 +65,14 @@ export async function POST(request: Request) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Please sign in first." }, { status: 401 });
     const { data: profile, error: profileError } = await supabase.from("profiles")
-      .select("daily_calorie_target,current_weight_kg,protein_g_per_kg,gemini_meal_ideas_enabled")
+      .select("daily_calorie_target,current_weight_kg,protein_g_per_kg")
       .eq("id", user.id)
       .maybeSingle();
     if (profileError) {
-      console.error("Could not check Gemini meal ideas setting", { code: profileError.code });
-      return NextResponse.json({ error: "Could not check your meal ideas setting. Please try again." }, { status: 500 });
+      console.error("Could not load profile for Gemini meal ideas", { code: profileError.code });
+      return NextResponse.json({ error: "Could not load your profile. Please try again." }, { status: 500 });
     }
-    if (profile?.gemini_meal_ideas_enabled !== true) {
-      return NextResponse.json({ error: "Turn on Gemini meal ideas in Profile before sending today’s nutrition summary to Google." }, { status: 403 });
-    }
+    if (!profile) return NextResponse.json({ error: "Complete your profile before requesting meal ideas." }, { status: 404 });
     const keyResult = await resolveGeminiApiKey(supabase, user.id);
     if ("error" in keyResult) {
       console.error("Could not resolve personal Gemini key", { reason: keyResult.error });

@@ -4,11 +4,6 @@ export type DatabaseSetupIssue = {
   migrations: string[];
 };
 
-const profileColumnMigrations: Record<string, string[]> = {
-  gemini_weekly_reflections_enabled: ["20261110000300_weekly_reflection_consent.sql"],
-  gemini_meal_ideas_enabled: ["20261110000400_gemini_meal_ideas_consent.sql"],
-};
-
 const migrationByTable: Record<string, string[]> = {
   exercise_logs: ["20261110000100_create_exercise_logs.sql"],
   food_entries: ["20261109000300_food_entries_and_protein_settings.sql"],
@@ -24,13 +19,7 @@ export function getDatabaseSetupIssue(error: { code?: string | null; message?: s
       ["has_my_gemini_key", "get_my_gemini_key", "set_my_gemini_key", "delete_my_gemini_key"].some((name) => message.includes(name))) {
     return { table: "user_gemini_keys", migrations: migrationByTable.user_gemini_keys };
   }
-  if (error.code === "42703" || error.code === "PGRST204") {
-    const column = Object.keys(profileColumnMigrations).find((name) => message.includes(name));
-    if (column) {
-      return { table: "profiles", column, migrations: profileColumnMigrations[column] };
-    }
-    return null;
-  }
+  if (error.code === "42703" || error.code === "PGRST204") return null;
   if (error.code !== "PGRST205" && error.code !== "42P01") return null;
   const table = Object.keys(migrationByTable).find((name) =>
     message.includes(name) && (message.includes("table") || message.includes("relation")),

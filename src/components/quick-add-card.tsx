@@ -23,19 +23,19 @@ export function QuickAddCard({ item, day }: { item: QuickAdd; day: string }) {
           <input type="hidden" name="carbs_g" value={item.carbs_g} />
           <input type="hidden" name="fat_g" value={item.fat_g} />
           <input type="hidden" name="is_guessed" value={item.is_guessed ? "true" : "false"} />
-          <button data-pending-label="Adding…" className="flex min-h-0 w-full items-center gap-2 py-1 text-left">
+          <button data-pending-label="Adding…" className="flex min-h-11 w-full items-center gap-2 py-1 text-left">
             <span className="min-w-0 flex-1 truncate text-sm font-semibold">
               {item.name} {item.is_guessed && <span className="text-xs text-[#76591e]">· Guessed</span>}
             </span>
             <span className="shrink-0 text-xs text-[#7b8077]">{mealLabels[item.meal]} · {item.calories} kcal</span>
-            <span className="shrink-0 rounded-full bg-[#e9eee5] px-2.5 py-1 text-xs font-semibold text-[#3e5944]">Add</span>
+            <span className="shrink-0 rounded-full bg-[#e9eee5] px-3 py-1.5 text-xs font-semibold text-[#3e5944]">Add</span>
           </button>
         </form>
         <form action="/api/quick-adds" method="post">
           <input type="hidden" name="action" value="delete" />
           <input type="hidden" name="entry_date" value={day} />
           <input type="hidden" name="id" value={item.id} />
-          <button aria-label={`Remove ${item.name} from favorites`} data-pending-label="Removing…" className="min-h-0 rounded-lg px-2 py-1 text-xs text-[#81877e] hover:bg-red-50 hover:text-red-700">Remove</button>
+          <button aria-label={`Remove ${item.name} from favorites`} data-pending-label="Removing…" className="min-h-11 rounded-lg px-2 py-1 text-xs text-[#81877e] hover:bg-red-50 hover:text-red-700">Remove</button>
         </form>
       </div>
       <details className="ml-1 mt-1">
@@ -61,7 +61,7 @@ export function QuickAddCard({ item, day }: { item: QuickAdd; day: string }) {
             <input type="checkbox" name="is_guessed" value="true" defaultChecked={item.is_guessed} />
             Mark nutrition as guessed
           </label>
-          <button data-pending-label="Saving…" className="fit-button-primary col-span-2 sm:col-span-4">Save favorite</button>
+          <button data-pending-label="Saving…" className="fit-button-primary min-h-12 col-span-2 sm:col-span-4">Save favorite</button>
         </form>
       </details>
     </article>

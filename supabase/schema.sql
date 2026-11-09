@@ -11,9 +11,6 @@ create table public.profiles (
   maintenance_calories integer check (maintenance_calories between 1 and 20000),
   protein_g_per_kg numeric(2, 1) not null default 1.5 check (protein_g_per_kg between 1.2 and 2.0),
   food_memory_enabled boolean not null default false,
-  gemini_food_parsing_enabled boolean not null default false,
-  gemini_weekly_reflections_enabled boolean not null default false,
-  gemini_meal_ideas_enabled boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

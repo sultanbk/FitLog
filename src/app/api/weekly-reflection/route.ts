@@ -32,9 +32,6 @@ export async function POST(request: Request) {
   if (process.env.FITLOG_ENABLE_DEMO === "true") {
     const demo = await getDemoState();
     if (!demo.active || !demo.profile) return NextResponse.json({ error: "Please sign in first." }, { status: 401 });
-    if (demo.profile.gemini_weekly_reflections_enabled !== true) {
-      return NextResponse.json({ error: "Turn on weekly reflections in Profile before sending your activity summary to Google." }, { status: 403 });
-    }
     const [foodEntries, exerciseLogs] = await Promise.all([getDemoFoodEntries(), getDemoExerciseLogs()]);
     food = foodEntries.map(({ entry_date, calories, protein_g }) => ({ entry_date, calories, protein_g }));
     exercise = exerciseLogs.map(({ entry_date, repetitions }) => ({ entry_date, repetitions }));
@@ -42,17 +39,6 @@ export async function POST(request: Request) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Please sign in first." }, { status: 401 });
-    const { data: profile, error: profileError } = await supabase.from("profiles")
-      .select("gemini_weekly_reflections_enabled")
-      .eq("id", user.id)
-      .maybeSingle();
-    if (profileError) {
-      console.error("Could not check weekly reflection consent", { code: profileError.code });
-      return NextResponse.json({ error: "Could not check your reflection setting. Please try again or contact support." }, { status: 500 });
-    }
-    if (profile?.gemini_weekly_reflections_enabled !== true) {
-      return NextResponse.json({ error: "Turn on weekly reflections in Profile before sending your activity summary to Google." }, { status: 403 });
-    }
     const keyResult = await resolveGeminiApiKey(supabase, user.id);
     if ("error" in keyResult) {
       console.error("Could not resolve personal Gemini key", { reason: keyResult.error });

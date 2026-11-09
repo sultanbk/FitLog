@@ -28,9 +28,6 @@ export async function POST(request: Request) {
     daily_calorie_target: plan.dailyCalorieTarget,
     maintenance_calories: plan.maintenanceCalories,
     food_memory_enabled: existingDemo.profile?.food_memory_enabled ?? false,
-    gemini_food_parsing_enabled: existingDemo.profile?.gemini_food_parsing_enabled ?? false,
-    gemini_weekly_reflections_enabled: existingDemo.profile?.gemini_weekly_reflections_enabled ?? false,
-    gemini_meal_ideas_enabled: existingDemo.profile?.gemini_meal_ideas_enabled ?? false,
   };
   const response = NextResponse.redirect(new URL("/today?profileSaved=1", request.url), 303);
   response.cookies.set(DEMO_PROFILE_COOKIE, Buffer.from(JSON.stringify(profile)).toString("base64url"), {

@@ -6,6 +6,7 @@ import { DatabaseSetupNotice } from "@/components/database-setup-notice";
 import { ProgressChart } from "@/components/progress-chart";
 import { WeeklyReflectionCard } from "@/components/weekly-reflection";
 import { DatabaseSetupError, getDatabaseSetupIssue } from "@/lib/database-setup";
+import { hasGeminiKey } from "@/lib/gemini-api-key";
 import { createClient } from "@/lib/supabase/server";
 import {
   buildAnalyticsBuckets,
@@ -72,7 +73,7 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
   let calendarExercises: ExerciseRecord[] = [];
   let calendarWeights: WeightRecord[] = [];
   let suggestedWeight = 0;
-  let reflectionEnabled = false;
+  let reflectionEnabled = hasGeminiKey(false, process.env.GEMINI_API_KEY);
   let weightAction = "/api/weigh-ins";
   let databaseSetupIssue: ReturnType<typeof getDatabaseSetupIssue> = null;
 
@@ -80,7 +81,6 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
     const demo = await getDemoState();
     if (!demo.active) redirect("/login");
     if (!demo.profile) redirect("/onboarding");
-    reflectionEnabled = demo.profile.gemini_weekly_reflections_enabled === true;
     weightAction = "/api/demo/weigh-ins";
     suggestedWeight = demo.profile.current_weight_kg;
     const [foodEntries, exerciseLogs, weighIns] = await Promise.all([
@@ -107,40 +107,55 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) redirect("/login");
-    const { data: profile, error: profileError } = await supabase.from("profiles")
-      .select("current_weight_kg,age_years,gemini_weekly_reflections_enabled")
-      .eq("id", user.id)
-      .maybeSingle();
+    const rangeDataPromise = calendarInsidePeriod
+      ? loadAnalyticsData(supabase, user.id, periodStart, today)
+          .then((data) => ({ period: data, calendar: data }))
+      : Promise.all([
+          loadAnalyticsData(supabase, user.id, periodStart, today),
+          loadAnalyticsData(supabase, user.id, calendarStart, calendarEnd),
+        ]).then(([periodData, calendarData]) => ({ period: periodData, calendar: calendarData }));
+    const keyStatusPromise = reflectionEnabled
+      ? Promise.resolve(null)
+      : supabase.rpc("has_my_gemini_key");
+    const [profileResult, rangeDataResult, keyStatusResult] = await Promise.all([
+      supabase.from("profiles")
+        .select("current_weight_kg,age_years")
+        .eq("id", user.id)
+        .maybeSingle(),
+      rangeDataPromise.then((data) => ({ data }) as const, (error: unknown) => ({ error }) as const),
+      keyStatusPromise,
+    ]);
+    const { data: profile, error: profileError } = profileResult;
     if (profileError) {
       const setupIssue = getDatabaseSetupIssue(profileError);
       if (setupIssue) return <DatabaseSetupNotice active="progress" issue={setupIssue} />;
       throw new Error(`Could not load your profile: ${profileError.message}`);
     }
     if (!profile?.age_years) redirect("/onboarding");
-    reflectionEnabled = profile.gemini_weekly_reflections_enabled === true;
+    if (keyStatusResult) {
+      if (keyStatusResult.error) {
+        const setupIssue = getDatabaseSetupIssue(keyStatusResult.error);
+        if (setupIssue) return <DatabaseSetupNotice active="progress" issue={setupIssue} />;
+        throw new Error(`Could not check your Gemini key status: ${keyStatusResult.error.message}`);
+      }
+      reflectionEnabled = hasGeminiKey(keyStatusResult.data === true, process.env.GEMINI_API_KEY);
+    }
     suggestedWeight = Number(profile.current_weight_kg);
 
-    try {
-      const analyticsData = await loadAnalyticsData(supabase, user.id, periodStart, today);
-      nutrition = analyticsData.nutrition;
-      exercises = analyticsData.exercises;
-      weights = analyticsData.weights;
-      if (calendarInsidePeriod) {
-        calendarNutrition = nutrition;
-        calendarExercises = exercises;
-        calendarWeights = weights;
-      } else {
-        const calendarData = await loadAnalyticsData(supabase, user.id, calendarStart, calendarEnd);
-        calendarNutrition = calendarData.nutrition;
-        calendarExercises = calendarData.exercises;
-        calendarWeights = calendarData.weights;
-      }
-    } catch (error) {
-      if (!(error instanceof DatabaseSetupError)) throw error;
-      databaseSetupIssue = error.issue;
+    if ("error" in rangeDataResult) {
+      if (!(rangeDataResult.error instanceof DatabaseSetupError)) throw rangeDataResult.error;
+      databaseSetupIssue = rangeDataResult.error.issue;
+    } else {
+      const { period: periodData, calendar: calendarData } = rangeDataResult.data;
+      nutrition = periodData.nutrition;
+      exercises = periodData.exercises;
+      weights = periodData.weights;
+      calendarNutrition = calendarData.nutrition;
+      calendarExercises = calendarData.exercises;
+      calendarWeights = calendarData.weights;
+      const latestWeight = [...weights].sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+      if (latestWeight) suggestedWeight = latestWeight.weight_kg;
     }
-    const latestWeight = [...weights].sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
-    if (latestWeight) suggestedWeight = latestWeight.weight_kg;
   }
 
   if (databaseSetupIssue) return <DatabaseSetupNotice active="progress" issue={databaseSetupIssue} />;
@@ -174,9 +189,9 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
             <h2 id="analytics-title" className="mt-2 text-2xl">Your patterns</h2>
             <p className="mt-1 text-sm text-[#7b8077]">{periods.find((option) => option.id === period)?.detail} · averages use logged days only</p>
           </div>
-          <nav aria-label="Analytics time range" className="flex rounded-lg border border-[#e6e3da] bg-[#f6f4ef] p-1">
+          <nav aria-label="Analytics time range" className="grid w-full grid-cols-3 rounded-lg border border-[#e6e3da] bg-[#f6f4ef] p-1 sm:w-auto">
             {periods.map((option) => (
-              <Link key={option.id} href={`/progress?period=${option.id}&month=${calendarMonth}`} aria-current={period === option.id ? "page" : undefined} className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${period === option.id ? "bg-[#fffefa] text-[#35483a] shadow-sm" : "text-[#7b8077] hover:text-[#35483a]"}`}>{option.label}</Link>
+              <Link key={option.id} href={`/progress?period=${option.id}&month=${calendarMonth}`} aria-current={period === option.id ? "page" : undefined} className={`rounded-md px-3 py-2.5 text-center text-sm font-medium transition-colors ${period === option.id ? "bg-[#fffefa] text-[#35483a] shadow-sm" : "text-[#7b8077] hover:text-[#35483a]"}`}>{option.label}</Link>
             ))}
           </nav>
         </div>
@@ -220,11 +235,11 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
           <form action={weightAction} method="post" data-draft-key={`weight:${today}`} className="mt-2 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end lg:grid-cols-1">
             <label className="block text-sm font-medium text-[#454c42]">Weight
               <span className="relative mt-1.5 block">
-                <input className="fit-input pr-14" name="weight_kg" type="number" inputMode="decimal" required min="25" max="350" step="0.1" defaultValue={suggestedWeight} />
+                <input className="fit-input pr-14" name="weight_kg" type="number" inputMode="decimal" enterKeyHint="done" autoComplete="off" required min="25" max="350" step="0.1" defaultValue={suggestedWeight} />
                 <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#81877e]">kg</span>
               </span>
             </label>
-            <button data-pending-label="Saving…" className="fit-button-primary w-full sm:w-auto lg:w-full">Save weigh-in</button>
+            <button data-pending-label="Saving…" className="fit-button-primary min-h-12 w-full sm:w-auto lg:w-full">Save weigh-in</button>
           </form>
         </section>
       </div>

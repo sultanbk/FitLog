@@ -23,22 +23,20 @@ export async function POST(request: Request) {
   if (isDemo) {
     const demo = await getDemoState();
     if (!demo.active || !demo.profile) return NextResponse.json({ error: "Please sign in and finish your profile first." }, { status: 401 });
-    if (demo.profile.gemini_food_parsing_enabled !== true) return NextResponse.json({ error: "Gemini food parsing is off. Turn it on in Profile to send food text to Google." }, { status: 403 });
     memoryEnabled = demo.profile.food_memory_enabled === true;
     if (memoryEnabled) memories = await getDemoFoodMemories();
   } else {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Please sign in first." }, { status: 401 });
-    const { data: profile } = await supabase.from("profiles").select("food_memory_enabled,gemini_food_parsing_enabled").eq("id", user.id).maybeSingle();
-    if (profile?.gemini_food_parsing_enabled !== true) return NextResponse.json({ error: "Gemini food parsing is off. Turn it on in Profile to send food text to Google." }, { status: 403 });
+    const { data: profile } = await supabase.from("profiles").select("food_memory_enabled").eq("id", user.id).maybeSingle();
     const keyResult = await resolveGeminiApiKey(supabase, user.id);
     if ("error" in keyResult) {
       console.error("Could not resolve personal Gemini key", { reason: keyResult.error });
       return NextResponse.json({ error: "Your Gemini key settings could not be loaded. Please try again." }, { status: 500 });
     }
     apiKey = keyResult.apiKey;
-    memoryEnabled = profile.food_memory_enabled === true;
+    memoryEnabled = profile?.food_memory_enabled === true;
     if (memoryEnabled) {
       const { data } = await supabase.from("food_memory").select("id,name,serving_description,calories,protein_g,carbs_g,fat_g,updated_at").eq("user_id", user.id).order("updated_at", { ascending: false }).limit(20);
       memories = (data ?? []) as FoodMemory[];
