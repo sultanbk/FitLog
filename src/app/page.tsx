@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getDemoState } from "@/lib/demo-session";
 
 export default async function Home() {
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.FITLOG_ENABLE_DEMO === "true") {
     const demo = await getDemoState();
     if (!demo.active) redirect("/login");
     redirect(demo.profile ? "/today" : "/onboarding");

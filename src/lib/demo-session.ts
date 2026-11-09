@@ -6,6 +6,7 @@ export const DEMO_PROFILE_COOKIE = "fitlog_demo_profile";
 export const DEMO_WEIGH_INS_COOKIE = "fitlog_demo_weigh_ins";
 export const DEMO_FOOD_ENTRIES_COOKIE = "fitlog_demo_food_entries";
 export const DEMO_FOOD_MEMORY_COOKIE = "fitlog_demo_food_memory";
+export const DEMO_QUICK_ADDS_COOKIE = "fitlog_demo_quick_adds";
 export const DEMO_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 
 export type DemoProfile = {
@@ -20,14 +21,16 @@ export type DemoProfile = {
   daily_calorie_target?: number;
   maintenance_calories?: number;
   food_memory_enabled?: boolean;
+  gemini_food_parsing_enabled?: boolean;
 };
 
 export type DemoWeighIn = { id: string; weight_kg: number; created_at: string };
 export type FoodEntry = { id: string; entry_date: string; name: string; meal: "breakfast" | "lunch" | "snack" | "dinner"; calories: number; protein_g: number; carbs_g: number; fat_g: number; is_guessed?: boolean; created_at: string };
 export type FoodMemory = { id: string; name: string; serving_description: string; calories: number; protein_g: number; carbs_g: number; fat_g: number; updated_at: string };
+export type QuickAdd = { id: string; name: string; meal: "breakfast" | "lunch" | "snack" | "dinner"; calories: number; protein_g: number; carbs_g: number; fat_g: number; is_guessed: boolean; created_at: string };
 
 export async function getDemoState(): Promise<{ active: boolean; profile: DemoProfile | null }> {
-  if (process.env.NODE_ENV === "production") return { active: false, profile: null };
+  if (process.env.FITLOG_ENABLE_DEMO !== "true") return { active: false, profile: null };
 
   const cookieStore = await cookies();
   const active = cookieStore.get(DEMO_SESSION_COOKIE)?.value === "1";
@@ -44,14 +47,14 @@ export async function getDemoState(): Promise<{ active: boolean; profile: DemoPr
         !["sedentary", "light", "moderate", "active"].includes(value.activity_level ?? "")) {
       return { active, profile: null };
     }
-    return { active, profile: { protein_g_per_kg: 1.5, food_memory_enabled: false, ...value } as DemoProfile };
+    return { active, profile: { protein_g_per_kg: 1.5, food_memory_enabled: false, gemini_food_parsing_enabled: false, ...value } as DemoProfile };
   } catch {
     return { active, profile: null };
   }
 }
 
 export async function getDemoWeighIns(): Promise<DemoWeighIn[]> {
-  if (process.env.NODE_ENV === "production") return [];
+  if (process.env.FITLOG_ENABLE_DEMO !== "true") return [];
   const cookieStore = await cookies();
   if (cookieStore.get(DEMO_SESSION_COOKIE)?.value !== "1") return [];
   const encodedEntries = cookieStore.get(DEMO_WEIGH_INS_COOKIE)?.value;
@@ -71,7 +74,7 @@ export async function getDemoWeighIns(): Promise<DemoWeighIn[]> {
 }
 
 export async function getDemoFoodEntries(): Promise<FoodEntry[]> {
-  if (process.env.NODE_ENV === "production") return [];
+  if (process.env.FITLOG_ENABLE_DEMO !== "true") return [];
   const cookieStore = await cookies();
   if (cookieStore.get(DEMO_SESSION_COOKIE)?.value !== "1") return [];
   const encoded = cookieStore.get(DEMO_FOOD_ENTRIES_COOKIE)?.value;
@@ -83,7 +86,7 @@ export async function getDemoFoodEntries(): Promise<FoodEntry[]> {
 }
 
 export async function getDemoFoodMemories(): Promise<FoodMemory[]> {
-  if (process.env.NODE_ENV === "production") return [];
+  if (process.env.FITLOG_ENABLE_DEMO !== "true") return [];
   const cookieStore = await cookies();
   if (cookieStore.get(DEMO_SESSION_COOKIE)?.value !== "1") return [];
   const encoded = cookieStore.get(DEMO_FOOD_MEMORY_COOKIE)?.value;
@@ -91,5 +94,17 @@ export async function getDemoFoodMemories(): Promise<FoodMemory[]> {
   try {
     const memories = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as FoodMemory[];
     return memories.filter((memory) => typeof memory.id === "string" && typeof memory.name === "string" && typeof memory.serving_description === "string" && [memory.calories, memory.protein_g, memory.carbs_g, memory.fat_g].every(Number.isFinite)).slice(0, 8);
+  } catch { return []; }
+}
+
+export async function getDemoQuickAdds(): Promise<QuickAdd[]> {
+  if (process.env.FITLOG_ENABLE_DEMO !== "true") return [];
+  const cookieStore = await cookies();
+  if (cookieStore.get(DEMO_SESSION_COOKIE)?.value !== "1") return [];
+  const encoded = cookieStore.get(DEMO_QUICK_ADDS_COOKIE)?.value;
+  if (!encoded) return [];
+  try {
+    const items = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as QuickAdd[];
+    return items.filter((item) => typeof item.id === "string" && typeof item.name === "string" && ["breakfast", "lunch", "snack", "dinner"].includes(item.meal) && Number.isInteger(item.calories) && [item.protein_g, item.carbs_g, item.fat_g].every(Number.isFinite) && typeof item.is_guessed === "boolean").slice(0, 8);
   } catch { return []; }
 }

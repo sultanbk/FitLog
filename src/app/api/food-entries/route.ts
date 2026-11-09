@@ -18,7 +18,7 @@ export async function POST(request: Request) {
   const action = String(form.get("action") ?? "save");
   const id = String(form.get("id") ?? "");
   if (!validDay(day)) return redirect(request, new Date().toISOString().slice(0, 10), "error", "Invalid+date");
-  const isDemo = process.env.NODE_ENV !== "production" && request.headers.get("cookie")?.split(";").some((part) => part.trim() === `${DEMO_SESSION_COOKIE}=1`);
+  const isDemo = process.env.FITLOG_ENABLE_DEMO === "true" && request.headers.get("cookie")?.split(";").some((part) => part.trim() === `${DEMO_SESSION_COOKIE}=1`);
   if (isDemo) {
     const entries = await getDemoFoodEntries();
     let next = entries;

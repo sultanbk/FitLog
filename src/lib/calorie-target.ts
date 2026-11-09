@@ -37,7 +37,19 @@ const ACTIVITY_MULTIPLIERS: Record<ActivityLevel, number> = {
 };
 
 const LOSS_CALORIE_FLOOR = 1200;
+const LOSS_WEEKLY_CHANGE_CAP_KG = 0.75;
 const KCAL_PER_KG = 7700;
+const GAIN_SURPLUS_CAP_CALORIES = 500;
+
+export function suggestedGoalDurationDays(currentWeightKg: number, goalWeightKg: number): number | null {
+  if (!Number.isFinite(currentWeightKg) || !Number.isFinite(goalWeightKg)) return null;
+  const differenceKg = Math.abs(goalWeightKg - currentWeightKg);
+  if (differenceKg === 0) return null;
+  const weeklyCapKg = goalWeightKg > currentWeightKg
+    ? GAIN_SURPLUS_CAP_CALORIES * 7 / KCAL_PER_KG
+    : LOSS_WEEKLY_CHANGE_CAP_KG;
+  return Math.max(14, Math.ceil(differenceKg / weeklyCapKg * 7));
+}
 
 export function calculateDailyCaloriePlan(input: CaloriePlanInput): CaloriePlan {
   const {
@@ -51,16 +63,16 @@ export function calculateDailyCaloriePlan(input: CaloriePlanInput): CaloriePlan 
     proteinGramsPerKg = 1.5,
   } = input;
 
-  // Mifflin-St Jeor is 10 x kg + 6.25 x cm - 5 x age, then +5 for male or -161 for female.
+  // Mifflin-St Jeor estimates resting energy expenditure: 10 x kg + 6.25 x cm - 5 x age, then +5 for male or -161 for female.
   const sexAdjustment = sex === "male" ? 5 : -161;
   const bmr = 10 * currentWeightKg + 6.25 * heightCm - 5 * ageYears + sexAdjustment;
 
-  // Maintenance is BMR multiplied by the selected activity factor.
+  // Estimated maintenance is resting energy multiplied by the selected activity factor.
   const maintenanceCalories = Math.round(bmr * ACTIVITY_MULTIPLIERS[activityLevel]);
 
   const direction = Math.sign(goalWeightKg - currentWeightKg);
   const requestedWeeklyChangeKg = Math.abs(goalWeightKg - currentWeightKg) / durationDays * 7;
-  const weeklyCapKg = direction > 0 ? 0.5 : 0.75;
+  const weeklyCapKg = direction > 0 ? GAIN_SURPLUS_CAP_CALORIES * 7 / KCAL_PER_KG : LOSS_WEEKLY_CHANGE_CAP_KG;
   const cappedWeeklyChangeKg = Math.min(requestedWeeklyChangeKg, weeklyCapKg);
   const capApplied = direction !== 0 && requestedWeeklyChangeKg > weeklyCapKg;
 
@@ -80,7 +92,7 @@ export function calculateDailyCaloriePlan(input: CaloriePlanInput): CaloriePlan 
   }
 
   const capMessage = capApplied
-    ? `The requested weekly ${direction > 0 ? "gain" : "loss"} was capped at ${weeklyCapKg} kg.`
+    ? `The requested weekly ${direction > 0 ? "gain" : "loss"} was capped at ${Number(weeklyCapKg.toFixed(2))} kg.`
     : null;
   const floorMessage = floorApplied
     ? `The loss target was raised to the ${LOSS_CALORIE_FLOOR.toLocaleString()} kcal/day minimum.`

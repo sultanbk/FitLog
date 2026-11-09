@@ -2,9 +2,10 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getDemoState } from "@/lib/demo-session";
 import { saveProfile } from "./actions";
+import { ProfileFields } from "@/components/profile-fields";
 
 export default async function OnboardingPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const isLocalDemo = process.env.NODE_ENV !== "production";
+  const isLocalDemo = process.env.FITLOG_ENABLE_DEMO === "true";
   if (isLocalDemo) {
     const demo = await getDemoState();
     if (!demo.active) redirect("/login");
@@ -36,27 +37,4 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
       </section>
     </main>
   );
-}
-
-function ProfileFields() {
-  return <>
-    <Field id="age_years" label="Age" unit="years" min="18" max="100" step="1" />
-    <SelectField id="sex" label="Sex used for the BMR estimate" options={[["female", "Female"], ["male", "Male"]]} />
-    <SelectField id="activity_level" label="Activity level" options={[
-      ["sedentary", "Sedentary"], ["light", "Light"], ["moderate", "Moderate"], ["active", "Active"],
-    ]} />
-    <Field id="height_cm" label="Height" unit="cm" min="80" max="250" step="0.1" />
-    <Field id="current_weight_kg" label="Current weight" unit="kg" min="25" max="350" step="0.1" />
-    <Field id="goal_weight_kg" label="Goal weight" unit="kg" min="25" max="350" step="0.1" />
-    <Field id="goal_duration_days" label="Goal duration" unit="days" min="14" max="3650" step="1" />
-    <button className="w-full rounded-xl bg-[#315c35] px-4 py-3 font-medium text-white hover:bg-[#264b2b]">Save and see my target</button>
-  </>;
-}
-
-function SelectField({ id, label, options }: { id: string; label: string; options: [string, string][] }) {
-  return <div><label htmlFor={id} className="mb-2 block text-sm font-medium">{label}</label><select id={id} name={id} required defaultValue="" className="w-full rounded-xl border border-[#dfe3d9] bg-white px-4 py-3 outline-none focus:border-[#57834d]"><option value="" disabled>Select one</option>{options.map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></div>;
-}
-
-function Field({ id, label, unit, min, max, step }: { id: string; label: string; unit: string; min: string; max: string; step: string }) {
-  return <div><label htmlFor={id} className="mb-2 block text-sm font-medium">{label}</label><div className="relative"><input id={id} name={id} type="number" required min={min} max={max} step={step} className="w-full rounded-xl border border-[#dfe3d9] px-4 py-3 pr-16 outline-none focus:border-[#57834d]" /><span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#81877e]">{unit}</span></div></div>;
 }

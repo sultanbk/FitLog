@@ -1,31 +1,22 @@
 # FitLog
 
-FitLog is a mobile-first personal health tracker with private profiles, food entries, daily nutrition progress, and weigh-ins.
+FitLog is a private, mobile-first health tracker for Tipu, Shrutika GK, and Saukan. Each person signs in with a username and password; account creation is limited to the three manually provisioned accounts.
 
 ## Set up
 
-1. For a new Supabase project, run [`supabase/schema.sql`](supabase/schema.sql) in its SQL Editor. For an existing project, run migrations in order: `20261109000100_profile_calorie_inputs.sql`, `20261109000200_create_weigh_ins.sql`, `20261109000300_food_entries_and_protein_settings.sql`, `20261109000400_food_entry_guessed_flag.sql`, then `20261109000500_user_food_memory.sql`.
-2. Copy `.env.example` to `.env.local` and fill in the project URL and anon key. Set `NEXT_PUBLIC_SITE_URL` to your app URL when it differs from `http://localhost:3000`.
-   Add `GEMINI_API_KEY` to `.env.local` for natural-language food parsing. It is read only by the server route and must not use a `NEXT_PUBLIC_` prefix.
-3. In Supabase Authentication, enable email sign-in, keep email confirmation enabled, and add your local and deployed callback URLs (`http://localhost:3000/auth/callback` and your deployed `/auth/callback`) to the allowed redirect URLs.
+1. For a new Supabase project, run [`supabase/schema.sql`](supabase/schema.sql) in its SQL Editor. For an existing project, run migrations in order: `20261109000100_profile_calorie_inputs.sql`, `20261109000200_create_weigh_ins.sql`, `20261109000300_food_entries_and_protein_settings.sql`, `20261109000400_food_entry_guessed_flag.sql`, `20261109000500_user_food_memory.sql`, `20261109000600_quick_adds.sql`, and `20261109000700_gemini_food_opt_in.sql`, followed by `20261109000800_food_memory_servings.sql`.
+2. Copy `.env.example` to `.env.local` and set the Supabase URL, anon key, Gemini key, and service-role key. The service-role key is only needed to provision the three accounts. Never expose it to browser code or commit it.
+3. In Supabase Auth, enable email/password sign-in and disable public sign-ups. FitLog uses internal addresses for usernames, so it does not send sign-in links.
 4. Run `npm install`, then `npm run dev`.
 
-In local development, the login page uses a demo session so you can build without Supabase email delivery. Demo profile, food, and weight data are kept in local HTTP-only cookies and are not written to Supabase. Production uses Supabase Auth and per-user row-level security.
+## Create the three accounts
 
-Only the public Supabase URL and anon key are used. Profile reads and writes require a signed-in user, and the database RLS policies restrict each profile row to its owner.
+With the service-role key in `.env.local`, run `npm run provision:users` once. It creates `tipu`, `shrutikagk`, and `saukan` and prints a different random starter password for each new account. Share each username and password privately with that person. The script skips existing users; reset an existing password in the Supabase dashboard. Each person can change their password under Profile after signing in. There is no self-signup or email-based password recovery.
 
-The editable estimate is in `src/lib/calorie-target.ts`. It estimates BMR with Mifflin-St Jeor, multiplies by the selected activity factor for maintenance, and applies a 7,700 kcal/kg adjustment. Planned gain is capped at 0.5 kg/week and planned loss at 0.75 kg/week. A 1,200 kcal/day floor applies to loss goals only; gain and maintenance targets are never raised to that floor. Protein defaults to 1.5 g per kg and can be adjusted from 1.2 to 2.0 g/kg on Profile. These are general estimates, not medical advice.
+Local development and production both use the same Supabase username/password login and per-user row-level security. The app does not log you out when switching environments; any existing Supabase browser session is kept.
 
-## Step 2: daily food logging
+## Food and goals
 
-Open Today to enter foods, update or delete entries, and browse earlier days. Progress contains weigh-ins; Profile contains your calorie calculation and protein setting. The SQL migration creates `food_entries` with owner-only row-level security for reads and writes.
+Today supports Gemini food parsing, manual entry, and quick adds. Gemini parsing is opt-in in Profile; nothing is saved until the user reviews and edits the preview. Google’s unpaid Gemini API tier may use submitted content to improve its services and may allow human review. Food memory has a separate opt-in and is sent only with matching descriptions when enabled.
 
-Today also includes Gemini natural-language logging. Gemini parses the text into structured nutrition, but nothing is saved until you review and edit the preview. Estimated values are marked as guessed. The model name is configured once in `src/lib/gemini-config.ts`.
-
-Food memory is off by default. Turn it on in Profile, then choose “Remember this food” for reviewed, non-guessed entries. You can view/edit individual memories, delete them, or clear all. Only matching foods are sent as context to Gemini, and only while memory is enabled. Memory data is stored per user with RLS.
-
-To test AI logging, set `GEMINI_API_KEY` in `.env.local` from Google AI Studio and restart the dev server. Describe several items in the Today box, parse them, review/edit the preview, then save. If Gemini is rate-limited, FitLog shows a retry message. You can still use manual food entry without a Gemini key.
-
-To try it locally, run `npm run dev`, use the demo login, complete onboarding if needed, then add a food entry on Today. Try editing and deleting it, switch to yesterday and back, change protein g/kg in Profile, and add a weigh-in on Progress. For a production/Supabase test, apply the migration above first and sign in with a real Supabase user; verify the food row's `user_id` matches that user's auth ID.
-
-Run the calorie calculation unit tests with `npm test`.
+The editable calorie estimate is in `src/lib/calorie-target.ts`. Targets are general estimates, not medical advice.

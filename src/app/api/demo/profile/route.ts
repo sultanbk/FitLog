@@ -4,7 +4,7 @@ import { calculateDailyCaloriePlan } from "@/lib/calorie-target";
 import { DEMO_COOKIE_MAX_AGE, DEMO_PROFILE_COOKIE, DEMO_SESSION_COOKIE } from "@/lib/demo-session";
 
 export async function POST(request: Request) {
-  if (process.env.NODE_ENV === "production") return new Response("Not found", { status: 404 });
+  if (process.env.FITLOG_ENABLE_DEMO !== "true") return new Response("Not found", { status: 404 });
   if (request.headers.get("cookie")?.split(";").some((part) => part.trim() === `${DEMO_SESSION_COOKIE}=1`) !== true) {
     return NextResponse.redirect(new URL("/login", request.url), 303);
   }
@@ -16,14 +16,16 @@ export async function POST(request: Request) {
   const heightCm = Number(formData.get("height_cm"));
   const currentWeightKg = Number(formData.get("current_weight_kg"));
   const goalWeightKg = Number(formData.get("goal_weight_kg"));
-  const goalDurationDays = Number(formData.get("goal_duration_days"));
+  const requestedDurationDays = Number(formData.get("goal_duration_days"));
+  const isMaintenanceGoal = goalWeightKg === currentWeightKg;
+  const goalDurationDays = isMaintenanceGoal ? 365 : requestedDurationDays;
   if (!Number.isInteger(ageYears) || ageYears < 18 || ageYears > 100 ||
       !["female", "male"].includes(sex) ||
       !["sedentary", "light", "moderate", "active"].includes(activityLevel) ||
       !Number.isFinite(heightCm) || heightCm < 80 || heightCm > 250 ||
       !Number.isFinite(currentWeightKg) || currentWeightKg < 25 || currentWeightKg > 350 ||
       !Number.isFinite(goalWeightKg) || goalWeightKg < 25 || goalWeightKg > 350 ||
-      !Number.isInteger(goalDurationDays) || goalDurationDays < 14 || goalDurationDays > 3650) {
+      (!isMaintenanceGoal && (!Number.isInteger(goalDurationDays) || goalDurationDays < 14 || goalDurationDays > 3650))) {
     return NextResponse.redirect(new URL("/onboarding?error=Please+check+your+answers+and+try+again", request.url), 303);
   }
 

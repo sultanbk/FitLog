@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   try { body = await request.json(); } catch { return NextResponse.json({ error: "Invalid food entry data." }, { status: 400 }); }
   const day = body.entry_date;
   if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day) || Number.isNaN(Date.parse(`${day}T00:00:00Z`)) || !Array.isArray(body.items) || body.items.length < 1 || body.items.length > 30 || !body.items.every(validItem)) return NextResponse.json({ error: "Check the food details and try again." }, { status: 400 });
-  const isDemo = process.env.NODE_ENV !== "production";
+  const isDemo = process.env.FITLOG_ENABLE_DEMO === "true";
   if (isDemo) {
     const demo = await getDemoState();
     if (!demo.active || !demo.profile) return NextResponse.json({ error: "Please sign in first." }, { status: 401 });
@@ -41,9 +41,10 @@ export async function POST(request: Request) {
       const previous = await getDemoFoodMemories();
       const nextMemories = [...previous];
       for (const item of selected) {
-        const canonical = item.name.trim().toLocaleLowerCase();
+        const canonical = item.name.trim().toLocaleLowerCase().replace(/\s+/g, " ");
+        const canonicalServing = item.serving_description.trim().toLocaleLowerCase().replace(/\s+/g, " ");
         const memory = { id: randomUUID(), name: item.name.trim(), serving_description: item.serving_description.trim(), calories: item.calories, protein_g: item.protein_g, carbs_g: item.carbs_g, fat_g: item.fat_g, updated_at: timestamp };
-        const found = nextMemories.findIndex((saved) => saved.name.toLocaleLowerCase() === canonical);
+        const found = nextMemories.findIndex((saved) => saved.name.toLocaleLowerCase().replace(/\s+/g, " ") === canonical && saved.serving_description.toLocaleLowerCase().replace(/\s+/g, " ") === canonicalServing);
         if (found >= 0) nextMemories[found] = { ...memory, id: nextMemories[found].id };
         else nextMemories.unshift(memory);
       }
@@ -67,9 +68,13 @@ export async function POST(request: Request) {
   const { error } = await supabase.from("food_entries").insert(values);
   if (error) return NextResponse.json({ error: "Could not save the food entries. Please try again." }, { status: 500 });
   if (selected.length) {
-    const byName = new Map(selected.map((item) => [item.name.trim().toLocaleLowerCase(), item]));
-    const memories = [...byName.values()].map((item) => ({ user_id: user.id, name: item.name.trim(), canonical_name: item.name.trim().toLocaleLowerCase(), serving_description: item.serving_description.trim(), calories: item.calories, protein_g: item.protein_g, carbs_g: item.carbs_g, fat_g: item.fat_g, updated_at: new Date().toISOString() }));
-    const { error: memoryError } = await supabase.from("food_memory").upsert(memories, { onConflict: "user_id,canonical_name" });
+    const byFoodAndServing = new Map(selected.map((item) => {
+      const canonicalName = item.name.trim().toLocaleLowerCase().replace(/\s+/g, " ");
+      const canonicalServing = item.serving_description.trim().toLocaleLowerCase().replace(/\s+/g, " ");
+      return [`${canonicalName}|${canonicalServing}`, { item, canonicalName, canonicalServing }];
+    }));
+    const memories = [...byFoodAndServing.values()].map(({ item, canonicalName, canonicalServing }) => ({ user_id: user.id, name: item.name.trim(), canonical_name: canonicalName, canonical_serving: canonicalServing, serving_description: item.serving_description.trim(), calories: item.calories, protein_g: item.protein_g, carbs_g: item.carbs_g, fat_g: item.fat_g, updated_at: new Date().toISOString() }));
+    const { error: memoryError } = await supabase.from("food_memory").upsert(memories, { onConflict: "user_id,canonical_name,canonical_serving" });
     if (memoryError) return NextResponse.json({ ok: true, memoryWarning: "Food was logged, but the remembered item could not be saved." });
   }
   return NextResponse.json({ ok: true });

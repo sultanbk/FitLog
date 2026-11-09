@@ -11,6 +11,7 @@ create table public.profiles (
   maintenance_calories integer check (maintenance_calories between 1 and 20000),
   protein_g_per_kg numeric(2, 1) not null default 1.5 check (protein_g_per_kg between 1.2 and 2.0),
   food_memory_enabled boolean not null default false,
+  gemini_food_parsing_enabled boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -41,6 +42,7 @@ create table public.food_memory (
   user_id uuid not null references auth.users(id) on delete cascade,
   name text not null check (char_length(trim(name)) between 1 and 100),
   canonical_name text not null check (char_length(canonical_name) between 1 and 100),
+  canonical_serving text not null check (char_length(canonical_serving) between 1 and 100),
   serving_description text not null check (char_length(trim(serving_description)) between 1 and 100),
   calories integer not null check (calories between 0 and 20000),
   protein_g numeric(7,1) not null check (protein_g between 0 and 1000),
@@ -48,11 +50,25 @@ create table public.food_memory (
   fat_g numeric(7,1) not null check (fat_g between 0 and 1000),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (user_id, canonical_name)
+  unique (user_id, canonical_name, canonical_serving)
+);
+
+create table public.quick_adds (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null check (char_length(trim(name)) between 1 and 100),
+  meal text not null check (meal in ('breakfast', 'lunch', 'snack', 'dinner')),
+  calories integer not null check (calories between 0 and 20000),
+  protein_g numeric(7,1) not null default 0 check (protein_g between 0 and 1000),
+  carbs_g numeric(7,1) not null default 0 check (carbs_g between 0 and 1000),
+  fat_g numeric(7,1) not null default 0 check (fat_g between 0 and 1000),
+  is_guessed boolean not null default false,
+  created_at timestamptz not null default now()
 );
 
 create index food_entries_user_date_meal_idx on public.food_entries (user_id, entry_date, meal, created_at);
 create index food_memory_user_idx on public.food_memory (user_id);
+create index quick_adds_user_created_at_idx on public.quick_adds (user_id, created_at desc);
 
 create index weigh_ins_user_created_at_idx on public.weigh_ins (user_id, created_at desc);
 
@@ -74,9 +90,11 @@ create policy "Users can update their own profile"
 alter table public.weigh_ins enable row level security;
 alter table public.food_entries enable row level security;
 alter table public.food_memory enable row level security;
+alter table public.quick_adds enable row level security;
 grant select, insert on public.weigh_ins to authenticated;
 grant select, insert, update, delete on public.food_entries to authenticated;
 grant select, insert, update, delete on public.food_memory to authenticated;
+grant select, insert, delete on public.quick_adds to authenticated;
 
 create policy "Users can view their own weigh-ins"
   on public.weigh_ins for select to authenticated
@@ -118,4 +136,14 @@ create policy "Users can update their own food memory"
 
 create policy "Users can delete their own food memory"
   on public.food_memory for delete to authenticated
+  using ((select auth.uid()) = user_id);
+
+create policy "Users can view their own quick adds"
+  on public.quick_adds for select to authenticated
+  using ((select auth.uid()) = user_id);
+create policy "Users can add their own quick adds"
+  on public.quick_adds for insert to authenticated
+  with check ((select auth.uid()) = user_id);
+create policy "Users can delete their own quick adds"
+  on public.quick_adds for delete to authenticated
   using ((select auth.uid()) = user_id);

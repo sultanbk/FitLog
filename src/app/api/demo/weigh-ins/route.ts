@@ -8,7 +8,7 @@ import {
 } from "@/lib/demo-session";
 
 export async function POST(request: Request) {
-  if (process.env.NODE_ENV === "production") return new Response("Not found", { status: 404 });
+  if (process.env.FITLOG_ENABLE_DEMO !== "true") return new Response("Not found", { status: 404 });
   if (request.headers.get("cookie")?.split(";").some((part) => part.trim() === `${DEMO_SESSION_COOKIE}=1`) !== true) {
     return NextResponse.redirect(new URL("/login", request.url), 303);
   }

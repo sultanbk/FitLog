@@ -12,8 +12,8 @@ function back(request: Request, value: string) {
 export async function POST(request: Request) {
   const form = await request.formData();
   const action = String(form.get("action") ?? "");
-  const demo = process.env.NODE_ENV !== "production" ? await getDemoState() : { active: false, profile: null };
-  if (process.env.NODE_ENV !== "production" && (!demo.active || !demo.profile)) return NextResponse.redirect(new URL("/login", request.url), 303);
+  const demo = process.env.FITLOG_ENABLE_DEMO === "true" ? await getDemoState() : { active: false, profile: null };
+  if (process.env.FITLOG_ENABLE_DEMO === "true" && (!demo.active || !demo.profile)) return NextResponse.redirect(new URL("/login", request.url), 303);
 
   if (demo.active && demo.profile) {
     const cookieStore = await cookies();
@@ -65,9 +65,11 @@ export async function POST(request: Request) {
   if (action === "save") {
     const item = validate(form);
     if (!item) return back(request, "invalid");
+    const canonical_name = item.name.toLocaleLowerCase().trim().replace(/\s+/g, " ");
+    const canonical_serving = item.serving_description.toLocaleLowerCase().trim().replace(/\s+/g, " ");
     const { error } = id
-      ? await supabase.from("food_memory").update({ ...item, canonical_name: item.name.toLocaleLowerCase(), updated_at: new Date().toISOString() }).eq("id", id).eq("user_id", user.id)
-      : await supabase.from("food_memory").upsert({ ...item, user_id: user.id, canonical_name: item.name.toLocaleLowerCase() }, { onConflict: "user_id,canonical_name" });
+      ? await supabase.from("food_memory").update({ ...item, canonical_name, canonical_serving, updated_at: new Date().toISOString() }).eq("id", id).eq("user_id", user.id)
+      : await supabase.from("food_memory").upsert({ ...item, user_id: user.id, canonical_name, canonical_serving }, { onConflict: "user_id,canonical_name,canonical_serving" });
     return back(request, error ? "error" : "saved");
   }
   return back(request, "invalid");

@@ -13,14 +13,16 @@ export async function saveProfile(formData: FormData) {
   const heightCm = Number(formData.get("height_cm"));
   const currentWeightKg = Number(formData.get("current_weight_kg"));
   const goalWeightKg = Number(formData.get("goal_weight_kg"));
-  const goalDurationDays = Number(formData.get("goal_duration_days"));
+  const requestedDurationDays = Number(formData.get("goal_duration_days"));
+  const isMaintenanceGoal = goalWeightKg === currentWeightKg;
+  const goalDurationDays = isMaintenanceGoal ? 365 : requestedDurationDays;
   if (!Number.isInteger(ageYears) || ageYears < 18 || ageYears > 100 ||
       !["female", "male"].includes(sex) ||
       !["sedentary", "light", "moderate", "active"].includes(activityLevel) ||
       !Number.isFinite(heightCm) || heightCm < 80 || heightCm > 250 ||
       !Number.isFinite(currentWeightKg) || currentWeightKg < 25 || currentWeightKg > 350 ||
       !Number.isFinite(goalWeightKg) || goalWeightKg < 25 || goalWeightKg > 350 ||
-      !Number.isInteger(goalDurationDays) || goalDurationDays < 14 || goalDurationDays > 3650) {
+      (!isMaintenanceGoal && (!Number.isInteger(goalDurationDays) || goalDurationDays < 14 || goalDurationDays > 3650))) {
     redirect("/onboarding?error=Please+check+your+answers+and+try+again");
   }
   const caloriePlan = calculateDailyCaloriePlan({

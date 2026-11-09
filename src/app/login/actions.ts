@@ -1,56 +1,21 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
-import { DEMO_COOKIE_MAX_AGE, DEMO_PROFILE_COOKIE, DEMO_SESSION_COOKIE } from "@/lib/demo-session";
 
-export async function startDemoSession() {
-  if (process.env.NODE_ENV === "production") redirect("/login");
-  const cookieStore = await cookies();
-  cookieStore.set(DEMO_SESSION_COOKIE, "1", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: false,
-    path: "/",
-    maxAge: DEMO_COOKIE_MAX_AGE,
-  });
-  cookieStore.delete(DEMO_PROFILE_COOKIE);
-  redirect("/");
-}
+const accountEmails: Record<string, string> = {
+  tipu: "tipu@fitlog.local",
+  shrutikagk: "shrutikagk@fitlog.local",
+  saukan: "saukan@fitlog.local",
+};
 
-export async function requestLoginLink(formData: FormData) {
-  const email = String(formData.get("email") ?? "").trim();
-  if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    redirect("/login?error=Enter+a+valid+email+address");
-  }
+export async function signInWithPassword(formData: FormData) {
+  const username = String(formData.get("username") ?? "").trim().toLowerCase().replace(/[\s._-]+/g, "");
+  const password = String(formData.get("password") ?? "");
+  const email = accountEmails[username];
+  if (!email || password.length < 1 || password.length > 128) redirect("/login?error=Username+or+password+is+incorrect");
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/auth/callback` },
-  });
-  if (error) {
-    // Keep credentials and the submitted email out of logs while preserving
-    // Supabase's response details for local troubleshooting.
-    console.error("Supabase sign-in link request failed", {
-      status: error.status,
-      code: error.code,
-      message: error.message,
-      cause: error.cause instanceof Error
-        ? { name: error.cause.name, message: error.cause.message, code: "code" in error.cause ? error.cause.code : undefined }
-        : error.cause,
-    });
-
-    if (error.code === "over_email_send_rate_limit") {
-      redirect("/login?error=Supabase’s+built-in+email+limit+has+been+reached.+It+allows+two+emails+per+hour+for+the+project.+Wait+for+it+to+reset+or+configure+custom+SMTP");
-    }
-    if (error.code === "over_request_rate_limit") {
-      redirect("/login?error=Too+many+sign-in+attempts.+Wait+a+few+minutes+before+trying+again");
-    }
-    if (error.status === 429) {
-      redirect("/login?error=Supabase+is+temporarily+rate-limiting+sign-in+emails.+Wait+before+retrying+or+check+your+project+email+limits");
-    }
-    redirect("/login?error=Could+not+send+the+sign-in+link.+Check+the+server+terminal+for+details");
-  }
-  redirect("/login?sent=1");
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) redirect("/login?error=Username+or+password+is+incorrect");
+  redirect("/");
 }

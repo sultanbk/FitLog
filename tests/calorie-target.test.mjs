@@ -15,8 +15,8 @@ test("gain goal adds a capped surplus above maintenance", () => {
   const plan = calculateDailyCaloriePlan({ ...base, goalWeightKg: 65 });
 
   assert.ok(plan.dailyCalorieTarget > plan.maintenanceCalories);
-  assert.equal(plan.dailySurplusDeficitCalories, 550);
-  assert.equal(plan.cappedWeeklyChangeKg, 0.5);
+  assert.equal(plan.dailySurplusDeficitCalories, 500);
+  assert.equal(plan.cappedWeeklyChangeKg, 500 * 7 / 7700);
   assert.equal(plan.capApplied, true);
 });
 
