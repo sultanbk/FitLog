@@ -33,6 +33,21 @@ h1, h2, h3 { font-family: Georgia, "Times New Roman", serif; font-weight: 500; l
 button, a, summary { -webkit-tap-highlight-color: transparent; }
 
 .fit-app { min-height: 100vh; background: var(--fit-canvas); }
+.fit-install-prompt {
+  position: fixed;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  z-index: 60;
+  display: flex;
+  width: min(28rem, calc(100vw - 2rem));
+  align-items: center;
+  gap: .75rem;
+  border: 1px solid var(--fit-border);
+  border-radius: 1rem;
+  padding: .8rem;
+  background: var(--fit-surface);
+  box-shadow: 0 12px 36px rgb(37 41 34 / 14%);
+}
 .fit-route-loading {
   display: grid;
   min-height: 100svh;
