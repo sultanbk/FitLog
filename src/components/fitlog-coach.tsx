@@ -214,7 +214,7 @@ export function FitLogCoach() {
         aria-controls="fitlog-coach-panel"
         aria-label={open ? "Close FitLog Coach" : "Chat with FitLog Coach"}
         onClick={() => setOpen((value) => !value)}
-        className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-40 flex min-h-14 items-center gap-2 rounded-full bg-[#3e5944] px-4 text-sm font-semibold text-white shadow-[0_8px_24px_rgb(47_48_36_/_22%)] transition hover:bg-[#304837] focus-visible:outline-white sm:bottom-6 sm:right-6"
+        className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-4 z-40 flex min-h-14 items-center gap-2 rounded-full bg-[#3e5944] px-4 text-sm font-semibold text-white shadow-[0_8px_24px_rgb(47_48_36_/_22%)] transition hover:bg-[#304837] focus-visible:outline-white sm:bottom-6 sm:right-6"
       >
         <span aria-hidden="true" className="grid size-8 place-items-center rounded-full bg-white/15 text-lg">✳</span>
         <span>{open ? "Close Coach" : "Ask Coach"}</span>
