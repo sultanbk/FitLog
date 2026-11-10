@@ -3,6 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { DatabaseSetupNotice } from "@/components/database-setup-notice";
 import { NaturalLanguageLogger } from "@/components/natural-language-logger";
 import { MealIdeas } from "@/components/meal-ideas";
+import { FitLogCoach } from "@/components/fitlog-coach";
 import { QuickAddCard } from "@/components/quick-add-card";
 import { getDatabaseSetupIssue } from "@/lib/database-setup";
 import { hasGeminiKey } from "@/lib/gemini-api-key";
@@ -28,6 +29,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   let quickAdds: QuickAdd[] = [];
   let geminiEnabled = hasGeminiKey(false, process.env.GEMINI_API_KEY);
   let mealIdeasEnabled = false;
+  let coachConsented = false;
   if (process.env.FITLOG_ENABLE_DEMO === "true") {
     const [demo, foodEntries, savedQuickAdds] = await Promise.all([
       getDemoState(),
@@ -35,7 +37,10 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
       getDemoQuickAdds(),
     ]);
     if (!demo.active) redirect("/login");
-    if (demo.profile) profile = { daily_calorie_target: demo.profile.daily_calorie_target ?? 2000, maintenance_calories: demo.profile.maintenance_calories ?? null, current_weight_kg: demo.profile.current_weight_kg, protein_g_per_kg: demo.profile.protein_g_per_kg ?? 1.5 };
+    if (demo.profile) {
+      profile = { daily_calorie_target: demo.profile.daily_calorie_target ?? 2000, maintenance_calories: demo.profile.maintenance_calories ?? null, current_weight_kg: demo.profile.current_weight_kg, protein_g_per_kg: demo.profile.protein_g_per_kg ?? 1.5 };
+      coachConsented = demo.profile.gemini_coach_enabled === true;
+    }
     mealIdeasEnabled = geminiEnabled;
     entries = foodEntries;
     quickAdds = savedQuickAdds;
@@ -43,7 +48,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
     const supabase = await createClient(); const { data: { user } } = await supabase.auth.getUser(); if (!user) redirect("/login");
     const keyStatusPromise = geminiEnabled ? Promise.resolve(null) : supabase.rpc("has_my_gemini_key");
     const [profileResult, foodResult, quickAddsResult, keyStatusResult] = await Promise.all([
-      supabase.from("profiles").select("daily_calorie_target,maintenance_calories,current_weight_kg,protein_g_per_kg,age_years").eq("id", user.id).maybeSingle(),
+      supabase.from("profiles").select("daily_calorie_target,maintenance_calories,current_weight_kg,protein_g_per_kg,age_years,gemini_coach_enabled").eq("id", user.id).maybeSingle(),
       supabase.from("food_entries").select("id,entry_date,name,meal,calories,protein_g,carbs_g,fat_g,is_guessed,created_at").eq("user_id", user.id).eq("entry_date", day).order("created_at", { ascending: false }),
       supabase.from("quick_adds").select("id,name,meal,calories,protein_g,carbs_g,fat_g,is_guessed,created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(20),
       keyStatusPromise,
@@ -61,7 +66,10 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
       if (setupIssue) return <DatabaseSetupNotice active="today" issue={setupIssue} />;
       throw new Error(`Could not load your profile: ${profileError.message}`);
     }
-    if (data?.age_years != null) profile = { daily_calorie_target: data.daily_calorie_target, maintenance_calories: data.maintenance_calories, current_weight_kg: Number(data.current_weight_kg), protein_g_per_kg: Number(data.protein_g_per_kg ?? 1.5) };
+    if (data?.age_years != null) {
+      profile = { daily_calorie_target: data.daily_calorie_target, maintenance_calories: data.maintenance_calories, current_weight_kg: Number(data.current_weight_kg), protein_g_per_kg: Number(data.protein_g_per_kg ?? 1.5) };
+      coachConsented = data.gemini_coach_enabled === true;
+    }
     const { data: rows, error: foodError } = foodResult;
     if (foodError) {
       const setupIssue = getDatabaseSetupIssue(foodError);
@@ -221,6 +229,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
         ) : null;
       })}
     </section>
+    {day === today && <FitLogCoach consented={coachConsented} available={geminiEnabled} />}
     {day === today && <MealIdeas enabled={mealIdeasEnabled} />}
     <p className="mt-7 text-center text-xs text-[#81877e]">Calorie and protein targets are estimates, not medical advice.</p>
   </AppShell>;

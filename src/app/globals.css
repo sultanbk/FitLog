@@ -33,6 +33,84 @@ h1, h2, h3 { font-family: Georgia, "Times New Roman", serif; font-weight: 500; l
 button, a, summary { -webkit-tap-highlight-color: transparent; }
 
 .fit-app { min-height: 100vh; background: var(--fit-canvas); }
+.fit-route-loading {
+  display: grid;
+  min-height: 100svh;
+  place-items: center;
+  padding: 1.5rem;
+  background:
+    radial-gradient(ellipse at 50% 42%, rgb(220 229 214 / 42%), transparent 48%),
+    var(--fit-canvas);
+}
+.fit-loading-card { width: min(100%, 20rem); text-align: center; }
+.fit-loading-mark {
+  position: relative;
+  display: grid;
+  width: 3.25rem;
+  height: 3.25rem;
+  margin: 0 auto 1.15rem;
+  place-items: center;
+  border: 1px solid #dfe5da;
+  border-radius: 1.1rem;
+  background: var(--fit-surface);
+  box-shadow: 0 8px 24px rgb(47 48 36 / 7%);
+}
+.fit-loading-mark::before,
+.fit-loading-mark::after,
+.fit-loading-mark span {
+  position: absolute;
+  display: block;
+  content: "";
+}
+.fit-loading-mark::before {
+  width: .56rem;
+  height: 1.15rem;
+  transform: rotate(38deg) translate(-.24rem, .01rem);
+  border: 1.5px solid var(--fit-sage);
+  border-radius: 100% 0 100% 0;
+}
+.fit-loading-mark::after {
+  width: .46rem;
+  height: .92rem;
+  transform: rotate(-37deg) translate(.26rem, -.01rem);
+  border: 1.5px solid var(--fit-sage-bright);
+  border-radius: 100% 0 100% 0;
+}
+.fit-loading-title { margin: 0; color: var(--fit-ink); font-size: .95rem; font-weight: 650; }
+.fit-loading-caption { margin: .4rem 0 1.25rem; color: var(--fit-muted-soft); font-size: .8rem; }
+.fit-loading-track {
+  display: block;
+  overflow: hidden;
+  width: 8rem;
+  height: .2rem;
+  margin-inline: auto;
+  border-radius: 999px;
+  background: #e7e9e1;
+}
+.fit-loading-track span {
+  display: block;
+  width: 42%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--fit-sage-bright);
+  animation: fit-loading-progress 1.15s ease-in-out infinite;
+}
+.fit-sr-only {
+  position: absolute;
+  overflow: hidden;
+  width: 1px;
+  height: 1px;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+@keyframes fit-loading-progress {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(250%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fit-loading-track span { animation: none; }
+}
 .fit-sidebar {
   display: none;
   position: fixed;

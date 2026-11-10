@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { FormSubmitButton } from "@/components/form-submit-button";
 import { GeminiKeyManager } from "@/components/gemini-key-manager";
+import { FitLogCoachConsent } from "@/components/fitlog-coach-consent";
 import { MemoryClearForm } from "@/components/memory-clear-form";
 import { changePassword } from "@/app/account/actions";
 import { DatabaseSetupNotice } from "@/components/database-setup-notice";
@@ -13,6 +14,7 @@ import { createClient } from "@/lib/supabase/server";
 type SettingsProfile = {
   protein_g_per_kg?: number;
   food_memory_enabled?: boolean;
+  gemini_coach_enabled?: boolean;
 };
 
 type SettingsParams = {
@@ -44,7 +46,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) redirect("/login");
     const { data, error } = await supabase.from("profiles")
-      .select("protein_g_per_kg,food_memory_enabled")
+      .select("protein_g_per_kg,food_memory_enabled,gemini_coach_enabled")
       .eq("id", user.id)
       .maybeSingle();
     if (error) {
@@ -138,9 +140,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <li>Food parsing sends the description you enter and, if enabled, matching saved food memories. Review and edit the estimate before it is saved.</li>
             <li>Meal ideas sends today’s calorie and protein totals plus up to eight saved favorite names. It does not send individual food entries.</li>
             <li>Weekly reflections sends calculated seven-day totals and weekday logging counts, not food names, individual entries, or weight.</li>
+            <li>FitLog Coach sends profile details, today’s food and exercise entries, recent seven-day food/activity totals, and weigh-ins from the last 14 days after you separately opt in and send a message.</li>
           </ul>
-          <p className="text-xs leading-5 text-[#7b8077]">Each feature runs only when you request it. Google’s API terms and data policies apply to these requests, including possible use for service improvement or human review on unpaid tiers. Remove your personal key here to return to the shared key, if configured.</p>
+          <p className="text-xs leading-5 text-[#7b8077]">Each feature runs only when you request it. Google’s API terms and data policies apply. On unpaid Gemini services, submitted content may be used to improve services and may be reviewed by people; Google advises against submitting personal or sensitive information to unpaid services. Remove your personal key here to return to the shared key, if configured.</p>
         </div>
+        <FitLogCoachConsent enabled={profile.gemini_coach_enabled === true} />
       </section>
 
       <section id="food-memory" aria-labelledby="food-memory-title" className="fit-card mt-5 scroll-mt-5">

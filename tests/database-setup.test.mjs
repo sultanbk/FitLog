@@ -33,6 +33,27 @@ test("legacy Gemini feature toggle columns are no longer required", () => {
   }), null);
 });
 
+test("missing FitLog Coach consent column points to its migration", () => {
+  assert.deepEqual(getDatabaseSetupIssue({
+    code: "42703",
+    message: "column profiles.gemini_coach_enabled does not exist",
+  }), {
+    table: "profiles",
+    column: "gemini_coach_enabled",
+    migrations: ["20261110000700_gemini_coach_opt_in.sql"],
+  });
+});
+
+test("missing Coach rate-limit RPC points to its migration", () => {
+  assert.deepEqual(getDatabaseSetupIssue({
+    code: "PGRST202",
+    message: "Could not find the function public.consume_my_fitlog_coach_request in the schema cache",
+  }), {
+    table: "fitlog_coach_request_events",
+    migrations: ["20261110000800_fitlog_coach_rate_limit.sql"],
+  });
+});
+
 test("missing personal Gemini key RPC points to its migration", () => {
   assert.deepEqual(getDatabaseSetupIssue({
     code: "PGRST202",

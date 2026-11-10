@@ -11,6 +11,7 @@ create table public.profiles (
   maintenance_calories integer check (maintenance_calories between 1 and 20000),
   protein_g_per_kg numeric(2, 1) not null default 1.5 check (protein_g_per_kg between 1.2 and 2.0),
   food_memory_enabled boolean not null default false,
+  gemini_coach_enabled boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -80,12 +81,19 @@ create table public.user_gemini_keys (
   updated_at timestamptz not null default now()
 );
 
+create table public.fitlog_coach_request_events (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  requested_at timestamptz not null
+);
+
 create index food_entries_user_date_meal_idx on public.food_entries (user_id, entry_date, meal, created_at);
 create index food_memory_user_idx on public.food_memory (user_id);
 create index quick_adds_user_created_at_idx on public.quick_adds (user_id, created_at desc);
 
 create index weigh_ins_user_created_at_idx on public.weigh_ins (user_id, created_at desc);
 create index exercise_logs_user_date_created_at_idx on public.exercise_logs (user_id, entry_date, created_at desc);
+create index fitlog_coach_request_events_user_time_idx on public.fitlog_coach_request_events (user_id, requested_at);
 
 alter table public.profiles enable row level security;
 
@@ -108,12 +116,14 @@ alter table public.food_entries enable row level security;
 alter table public.food_memory enable row level security;
 alter table public.quick_adds enable row level security;
 alter table public.user_gemini_keys enable row level security;
+alter table public.fitlog_coach_request_events enable row level security;
 grant select, insert on public.weigh_ins to authenticated;
 grant select, insert, delete on public.exercise_logs to authenticated;
 grant select, insert, update, delete on public.food_entries to authenticated;
 grant select, insert, update, delete on public.food_memory to authenticated;
 grant select, insert, update, delete on public.quick_adds to authenticated;
 revoke all on table public.user_gemini_keys from public, anon, authenticated;
+revoke all on table public.fitlog_coach_request_events from public, anon, authenticated;
 
 create policy "Users can view their own weigh-ins"
   on public.weigh_ins for select to authenticated
@@ -253,6 +263,62 @@ grant execute on function public.get_my_gemini_key() to authenticated;
 grant execute on function public.has_my_gemini_key() to authenticated;
 grant execute on function public.delete_my_gemini_key() to authenticated;
 
+create or replace function public.consume_my_fitlog_coach_request()
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  request_time timestamptz;
+  request_count integer;
+  oldest_request timestamptz;
+  retry_seconds integer;
+begin
+  if current_user_id is null then
+    raise exception 'Authentication required';
+  end if;
+
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(current_user_id::text, 0)
+  );
+  request_time := pg_catalog.clock_timestamp();
+
+  delete from public.fitlog_coach_request_events
+  where requested_at <= request_time - interval '1 hour';
+
+  select count(*)::integer, min(requested_at)
+    into request_count, oldest_request
+    from public.fitlog_coach_request_events
+    where user_id = current_user_id;
+
+  if request_count >= 10 then
+    retry_seconds := greatest(
+      1,
+      ceil(extract(epoch from (oldest_request + interval '1 hour' - request_time)))::integer
+    );
+    return pg_catalog.jsonb_build_object(
+      'allowed', false,
+      'remaining', 0,
+      'retry_after_seconds', retry_seconds
+    );
+  end if;
+
+  insert into public.fitlog_coach_request_events (user_id, requested_at)
+  values (current_user_id, request_time);
+
+  return pg_catalog.jsonb_build_object(
+    'allowed', true,
+    'remaining', 9 - request_count,
+    'retry_after_seconds', 0
+  );
+end;
+$$;
+
+revoke all on function public.consume_my_fitlog_coach_request() from public, anon, authenticated;
+grant execute on function public.consume_my_fitlog_coach_request() to authenticated;
+
 create or replace function public.clear_my_fitlog_data()
 returns void
 language plpgsql
@@ -266,6 +332,7 @@ begin
     raise exception 'Authentication required';
   end if;
 
+  delete from public.fitlog_coach_request_events where user_id = current_user_id;
   delete from public.weigh_ins where user_id = current_user_id;
   delete from public.exercise_logs where user_id = current_user_id;
   delete from public.food_entries where user_id = current_user_id;
