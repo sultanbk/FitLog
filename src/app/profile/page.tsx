@@ -1,12 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
-import { FitLogCoach } from "@/components/fitlog-coach";
 import { DatabaseSetupNotice } from "@/components/database-setup-notice";
 import { calculateDailyCaloriePlan } from "@/lib/calorie-target";
 import { getDatabaseSetupIssue } from "@/lib/database-setup";
 import { getDemoState } from "@/lib/demo-session";
-import { hasGeminiKey } from "@/lib/gemini-api-key";
 import { createClient } from "@/lib/supabase/server";
 
 type Profile = {
@@ -18,14 +16,12 @@ type Profile = {
   goal_weight_kg: number;
   goal_duration_days: number;
   protein_g_per_kg?: number;
-  gemini_coach_enabled?: boolean;
 };
 
 export default async function ProfilePage({ searchParams }: { searchParams: Promise<{ profileUpdated?: string }> }) {
   const params = await searchParams;
   const localDemo = process.env.FITLOG_ENABLE_DEMO === "true";
   let profile: Profile | null = null;
-  let coachAvailable = hasGeminiKey(false, process.env.GEMINI_API_KEY);
   if (localDemo) {
     const demo = await getDemoState();
     if (!demo.active) redirect("/login");
@@ -34,25 +30,15 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) redirect("/login");
-    const keyStatusPromise = coachAvailable ? Promise.resolve(null) : supabase.rpc("has_my_gemini_key");
-    const [{ data, error }, keyStatus] = await Promise.all([
-      supabase.from("profiles")
-        .select("age_years,sex,activity_level,height_cm,current_weight_kg,goal_weight_kg,goal_duration_days,protein_g_per_kg,gemini_coach_enabled")
-        .eq("id", user.id)
-        .maybeSingle(),
-      keyStatusPromise,
-    ]);
+    const { data, error } = await supabase.from("profiles")
+      .select("age_years,sex,activity_level,height_cm,current_weight_kg,goal_weight_kg,goal_duration_days,protein_g_per_kg")
+      .eq("id", user.id)
+      .maybeSingle();
     if (error) {
       const setupIssue = getDatabaseSetupIssue(error);
       if (setupIssue) return <DatabaseSetupNotice active="profile" issue={setupIssue} />;
       throw new Error(`Could not load your profile: ${error.message}`);
     }
-    if (keyStatus?.error) {
-      const setupIssue = getDatabaseSetupIssue(keyStatus.error);
-      if (setupIssue) return <DatabaseSetupNotice active="profile" issue={setupIssue} />;
-      throw new Error(`Could not check your Gemini key status: ${keyStatus.error.message}`);
-    }
-    coachAvailable = hasGeminiKey(keyStatus?.data === true, process.env.GEMINI_API_KEY);
     profile = data as Profile | null;
   }
   if (!profile) redirect("/onboarding");
@@ -146,8 +132,6 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
           {profile.goal_weight_kg !== profile.current_weight_kg && <Stat label="Preferred timeline" value={`${profile.goal_duration_days} days`} />}
         </dl>
       </section>
-
-      <FitLogCoach consented={profile.gemini_coach_enabled === true} available={coachAvailable} />
 
       <Link href="/settings" className="mt-4 flex items-center justify-between rounded-2xl border border-[#e6e3da] bg-[#fffefa] p-5 text-sm transition-colors hover:bg-[#f5f7f2]">
         <span><span className="block font-semibold text-[#35483a]">Preferences, AI privacy & account</span><span className="mt-1 block text-[#7b8077]">Manage your Gemini key, password, and data.</span></span>

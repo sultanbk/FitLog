@@ -5,14 +5,19 @@ import { AppShell } from "@/components/app-shell";
 import { DatabaseSetupNotice } from "@/components/database-setup-notice";
 import { ProgressChart } from "@/components/progress-chart";
 import { WeeklyReflectionCard } from "@/components/weekly-reflection";
+import { WeeklyCheckInCard } from "@/components/weekly-check-in-card";
 import { DatabaseSetupError, getDatabaseSetupIssue } from "@/lib/database-setup";
 import { hasGeminiKey } from "@/lib/gemini-api-key";
+import { calculateWeeklyCheckIn, getMonday, type WeeklyCheckIn } from "@/lib/weekly-check-in";
+import { loadWeeklyCheckIn, WeeklyCheckInLoadError } from "@/lib/weekly-check-in-data";
 import { createClient } from "@/lib/supabase/server";
 import {
   buildAnalyticsBuckets,
+  addDays,
   calendarDays,
   dayInAppTimezone,
   getPeriodStart,
+  isValidDay,
   isValidMonth,
   monthKey,
   type AnalyticsPeriod,
@@ -73,6 +78,7 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
   let calendarExercises: ExerciseRecord[] = [];
   let calendarWeights: WeightRecord[] = [];
   let suggestedWeight = 0;
+  let weeklyCheckIn: WeeklyCheckIn | null = null;
   let reflectionEnabled = hasGeminiKey(false, process.env.GEMINI_API_KEY);
   let weightAction = "/api/weigh-ins";
   let databaseSetupIssue: ReturnType<typeof getDatabaseSetupIssue> = null;
@@ -88,6 +94,9 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
       getDemoExerciseLogs(),
       getDemoWeighIns(),
     ]);
+    const loggedDays = [...foodEntries.map((entry) => entry.entry_date), ...exerciseLogs.map((entry) => entry.entry_date)];
+    const firstLoggedDay = loggedDays.filter(isValidDay).sort()[0];
+    weeklyCheckIn = calculateWeeklyCheckIn(today, loggedDays, firstLoggedDay ?? addDays(getMonday(today), -56));
     const allData = fromDemoRecords(foodEntries, exerciseLogs, weighIns);
     nutrition = within(allData.nutrition, periodStart, today, (row) => row.entry_date);
     exercises = within(allData.exercises, periodStart, today, (row) => row.entry_date);
@@ -117,14 +126,25 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
     const keyStatusPromise = reflectionEnabled
       ? Promise.resolve(null)
       : supabase.rpc("has_my_gemini_key");
-    const [profileResult, rangeDataResult, keyStatusResult] = await Promise.all([
+    const checkInPromise = loadWeeklyCheckIn(supabase, user.id, today)
+      .then((data) => ({ data }) as const, (error: unknown) => ({ error }) as const);
+    const [profileResult, rangeDataResult, keyStatusResult, checkInResult] = await Promise.all([
       supabase.from("profiles")
         .select("current_weight_kg,age_years")
         .eq("id", user.id)
         .maybeSingle(),
       rangeDataPromise.then((data) => ({ data }) as const, (error: unknown) => ({ error }) as const),
       keyStatusPromise,
+      checkInPromise,
     ]);
+    if ("error" in checkInResult) {
+      if (!(checkInResult.error instanceof WeeklyCheckInLoadError)) throw checkInResult.error;
+      const setupIssue = getDatabaseSetupIssue(checkInResult.error.databaseError);
+      if (setupIssue) databaseSetupIssue = setupIssue;
+      else throw checkInResult.error;
+    } else {
+      weeklyCheckIn = checkInResult.data;
+    }
     const { data: profile, error: profileError } = profileResult;
     if (profileError) {
       const setupIssue = getDatabaseSetupIssue(profileError);
@@ -162,6 +182,8 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
 
   const buckets = buildAnalyticsBuckets(period, today, nutrition, exercises, weights);
   const loggedFoodDays = buckets.reduce((total, bucket) => total + bucket.foodDays, 0);
+  const foodEntryCount = buckets.reduce((total, bucket) => total + bucket.foodEntries, 0);
+  const guessedFoodEntryCount = buckets.reduce((total, bucket) => total + bucket.guessedFoodEntries, 0);
   const calorieTotal = buckets.reduce((total, bucket) => total + bucket.calories, 0);
   const proteinTotal = buckets.reduce((total, bucket) => total + bucket.protein, 0);
   const pushUpTotal = buckets.reduce((total, bucket) => total + bucket.pushUps, 0);
@@ -204,10 +226,16 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
         </div>
 
         {loggedFoodDays > 0 && <p className="mt-4 text-sm text-[#62685f]">Protein averaged <strong className="font-semibold text-[#35483a]">{Math.round(proteinTotal / loggedFoodDays)} g</strong> on days with food entries.</p>}
+        {foodEntryCount > 0 && <p className="mt-2 text-sm leading-6 text-[#62685f]">
+          {guessedFoodEntryCount > 0
+            ? <>{guessedFoodEntryCount} of {foodEntryCount} food entries in this period are marked as estimates. They’re included in totals, so nutrition trends may be less precise.</>
+            : <>No food entries in this period are marked as estimates. This doesn’t independently verify manually entered values.</>}
+        </p>}
         {orderedWeights.length > 1 && <p className="mt-2 text-xs leading-5 text-[#7b8077]">Recorded weight change compares your first and latest entries in this range. It’s a measurement, not a judgment.</p>}
       </section>
 
       <WeeklyReflectionCard enabled={reflectionEnabled} />
+      {weeklyCheckIn && <WeeklyCheckInCard progress={weeklyCheckIn} detailed />}
 
       <section aria-label={`${period} charts`} className="mt-5 grid gap-4 lg:grid-cols-2">
         <ProgressChart title="Calories" description="Daily total, or monthly total in the yearly view." buckets={buckets} metric="calories" unit="kcal" color="#71856a" />
@@ -258,7 +286,7 @@ function Summary({ label, value, detail }: { label: string; value: string; detai
 
 function fromDemoRecords(food: FoodEntry[], exercise: ExerciseLog[], weighIns: WeightRow[]): AnalyticsData {
   return {
-    nutrition: food.map((row) => ({ entry_date: row.entry_date, calories: Number(row.calories), protein_g: Number(row.protein_g) })),
+    nutrition: food.map((row) => ({ entry_date: row.entry_date, calories: Number(row.calories), protein_g: Number(row.protein_g), is_guessed: row.is_guessed === true })),
     exercises: exercise.map((row) => ({ entry_date: row.entry_date, repetitions: Number(row.repetitions) })),
     weights: weighIns.map((row) => ({ date: dayInAppTimezone(row.created_at), weight_kg: Number(row.weight_kg), created_at: row.created_at })),
   };
@@ -292,7 +320,7 @@ async function fetchNutrition(supabase: Awaited<ReturnType<typeof createClient>>
   const rows: NutritionRecord[] = [];
   for (let offset = 0; ; offset += 1000) {
     const { data, error } = await supabase.from("food_entries")
-      .select("entry_date,calories,protein_g")
+      .select("entry_date,calories,protein_g,is_guessed")
       .eq("user_id", userId)
       .gte("entry_date", start)
       .lte("entry_date", end)
@@ -304,7 +332,7 @@ async function fetchNutrition(supabase: Awaited<ReturnType<typeof createClient>>
       if (setupIssue) throw new DatabaseSetupError(setupIssue);
       throw new Error(`Could not load nutrition history: ${error.message}`);
     }
-    rows.push(...(data ?? []).map((row) => ({ entry_date: row.entry_date, calories: Number(row.calories), protein_g: Number(row.protein_g) })));
+    rows.push(...(data ?? []).map((row) => ({ entry_date: row.entry_date, calories: Number(row.calories), protein_g: Number(row.protein_g), is_guessed: row.is_guessed })));
     if (!data || data.length < 1000) break;
   }
   return rows;

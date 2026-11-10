@@ -22,6 +22,41 @@ import { resolveGeminiApiKey } from "@/lib/gemini-api-key";
 import { getDatabaseSetupIssue } from "@/lib/database-setup";
 import { createClient } from "@/lib/supabase/server";
 
+export async function GET() {
+  if (process.env.FITLOG_ENABLE_DEMO === "true") {
+    const demo = await getDemoState();
+    if (!demo.active) return NextResponse.json({ status: "signed_out" }, { status: 401 });
+    if (!demo.profile) return NextResponse.json({ status: "profile_missing" });
+    return NextResponse.json({
+      status: demo.profile.gemini_coach_enabled === true
+        ? (process.env.GEMINI_API_KEY ? "ready" : "key_missing")
+        : "consent_required",
+    });
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ status: "signed_out" }, { status: 401 });
+
+  const { data: profile, error: profileError } = await supabase.from("profiles")
+    .select("gemini_coach_enabled")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (profileError) {
+    console.error("Could not check FitLog Coach status", { code: profileError.code });
+    return NextResponse.json({ error: "Could not check Coach settings. Please try again." }, { status: 500 });
+  }
+  if (!profile) return NextResponse.json({ status: "profile_missing" });
+  if (profile.gemini_coach_enabled !== true) return NextResponse.json({ status: "consent_required" });
+
+  const keyResult = await resolveGeminiApiKey(supabase, user.id);
+  if ("error" in keyResult) {
+    console.error("Could not check Gemini key for FitLog Coach", { reason: keyResult.error });
+    return NextResponse.json({ error: "Could not check your Gemini key settings. Please try again." }, { status: 500 });
+  }
+  return NextResponse.json({ status: keyResult.apiKey ? "ready" : "key_missing" });
+}
+
 export async function POST(request: Request) {
   if (!request.headers.get("content-type")?.includes("application/json")) {
     return NextResponse.json({ error: "Invalid request." }, { status: 415 });

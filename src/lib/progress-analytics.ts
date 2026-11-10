@@ -4,6 +4,7 @@ export type NutritionRecord = {
   entry_date: string;
   calories: number;
   protein_g: number;
+  is_guessed?: boolean;
 };
 
 export type ExerciseRecord = {
@@ -23,6 +24,8 @@ export type AnalyticsBucket = {
   calories: number;
   protein: number;
   foodDays: number;
+  foodEntries: number;
+  guessedFoodEntries: number;
   pushUps: number;
   exerciseDays: number;
   averageWeight: number | null;
@@ -110,6 +113,8 @@ export function buildAnalyticsBuckets(
     calories: 0,
     protein: 0,
     foodDays: 0,
+    foodEntries: 0,
+    guessedFoodEntries: 0,
     pushUps: 0,
     exerciseDays: 0,
     averageWeight: null,
@@ -126,6 +131,8 @@ export function buildAnalyticsBuckets(
     if (index === undefined) continue;
     buckets[index].calories += Number(record.calories);
     buckets[index].protein += Number(record.protein_g);
+    buckets[index].foodEntries += 1;
+    if (record.is_guessed === true) buckets[index].guessedFoodEntries += 1;
     nutritionDays[index].add(record.entry_date);
   }
   for (const record of exercises) {

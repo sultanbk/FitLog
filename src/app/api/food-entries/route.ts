@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { DEMO_COOKIE_MAX_AGE, DEMO_FOOD_ENTRIES_COOKIE, DEMO_SESSION_COOKIE, getDemoFoodEntries } from "@/lib/demo-session";
+import { formatIndianFoodEntryName } from "@/lib/indian-food-catalog";
 
 const meals = ["breakfast", "lunch", "snack", "dinner"] as const;
 const numeric = ["calories", "protein_g", "carbs_g", "fat_g"] as const;
@@ -12,6 +13,12 @@ function redirect(request: Request, day: string, key: string, value: string, not
   return NextResponse.redirect(url, 303);
 }
 function validDay(day: string) { return /^\d{4}-\d{2}-\d{2}$/.test(day) && !Number.isNaN(Date.parse(`${day}T00:00:00Z`)); }
+function getFoodName(form: FormData) {
+  const rawName = form.get("name");
+  const servingValue = form.get("serving_grams");
+  if (typeof rawName !== "string") return "";
+  return formatIndianFoodEntryName(rawName, typeof servingValue === "string" ? servingValue : "invalid") ?? "";
+}
 
 export async function POST(request: Request) {
   const form = await request.formData();
@@ -28,7 +35,7 @@ export async function POST(request: Request) {
       next = entries.filter((entry) => entry.id !== id);
     }
     else {
-      const name = String(form.get("name") ?? "").trim(); const meal = String(form.get("meal") ?? "");
+      const name = getFoodName(form); const meal = String(form.get("meal") ?? "");
       const values = Object.fromEntries(numeric.map((key) => [key, Number(form.get(key))])) as Record<(typeof numeric)[number], number>;
       if (name.length < 1 || name.length > 100 || !meals.includes(meal as typeof meals[number]) || numeric.some((key) => !Number.isFinite(values[key]) || values[key] < 0 || values[key] > (key === "calories" ? 20000 : 1000)) || !Number.isInteger(values.calories)) return redirect(request, day, "error", "Check+the+food+details");
       const item = { id: id || randomUUID(), entry_date: day, name, meal: meal as typeof meals[number], ...values, is_guessed: form.get("is_guessed") === "true", created_at: new Date().toISOString() };
@@ -46,7 +53,7 @@ export async function POST(request: Request) {
     if (error || !data) return redirect(request, day, "error", error ? "Could+not+delete+item" : "Could+not+find+that+food+entry");
     return redirect(request, day, "saved", "1", "food-deleted");
   }
-  const name = String(form.get("name") ?? "").trim(); const meal = String(form.get("meal") ?? "");
+  const name = getFoodName(form); const meal = String(form.get("meal") ?? "");
   const values = Object.fromEntries(numeric.map((key) => [key, Number(form.get(key))])) as Record<(typeof numeric)[number], number>;
   if (name.length < 1 || name.length > 100 || !meals.includes(meal as typeof meals[number]) || numeric.some((key) => !Number.isFinite(values[key]) || values[key] < 0 || values[key] > (key === "calories" ? 20000 : 1000)) || !Number.isInteger(values.calories)) return redirect(request, day, "error", "Check+the+food+details");
   const item = { entry_date: day, name, meal, ...values, is_guessed: form.get("is_guessed") === "true" };

@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 const draftPrefix = "fitlog-form-draft:";
 const pendingDraftKey = "fitlog-pending-draft";
 const successParams = ["saved", "exerciseSaved", "profileSaved", "profileUpdated", "passwordSaved", "weightSaved"];
+let validationErrorSequence = 0;
 
 type FieldSnapshot = {
   name: string;
@@ -17,6 +18,46 @@ type FieldSnapshot = {
 function showDraftStatus(form: HTMLFormElement, message: string) {
   const status = form.querySelector<HTMLElement>("[data-draft-status]");
   if (status) status.textContent = message;
+}
+
+function showValidationError(field: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) {
+  const errorId = field.dataset.validationErrorId ?? `fit-field-error-${++validationErrorSequence}`;
+  field.dataset.validationErrorId = errorId;
+  field.setAttribute("aria-invalid", "true");
+
+  const describedBy = new Set((field.getAttribute("aria-describedby") ?? "").split(/\s+/).filter(Boolean));
+  describedBy.add(errorId);
+  field.setAttribute("aria-describedby", [...describedBy].join(" "));
+
+  let error = document.getElementById(errorId);
+  if (!error) {
+    error = document.createElement("p");
+    error.id = errorId;
+    error.className = "fit-field-error";
+    error.setAttribute("role", "status");
+    error.setAttribute("aria-live", "polite");
+    (field.closest("label") ?? field).insertAdjacentElement("afterend", error);
+  }
+  error.textContent = field.validationMessage || "Check this field and try again.";
+}
+
+function clearValidationError(field: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) {
+  const errorId = field.dataset.validationErrorId;
+  if (!errorId) return;
+
+  document.getElementById(errorId)?.remove();
+  delete field.dataset.validationErrorId;
+  field.removeAttribute("aria-invalid");
+
+  const describedBy = (field.getAttribute("aria-describedby") ?? "")
+    .split(/\s+/)
+    .filter((id) => id && id !== errorId);
+  if (describedBy.length) field.setAttribute("aria-describedby", describedBy.join(" "));
+  else field.removeAttribute("aria-describedby");
+}
+
+function isValidatableField(value: EventTarget | null): value is HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement {
+  return value instanceof HTMLInputElement || value instanceof HTMLSelectElement || value instanceof HTMLTextAreaElement;
 }
 
 function isFieldSnapshotArray(value: unknown): value is FieldSnapshot[] {
@@ -89,6 +130,9 @@ export function FormEnhancements() {
 
   useEffect(() => {
     const draftTimers = new Map<HTMLFormElement, ReturnType<typeof setTimeout>>();
+    document.querySelectorAll<HTMLFormElement>("form").forEach((form) => {
+      form.noValidate = true;
+    });
     const params = new URLSearchParams(search);
     if (params.get("dataCleared") === "1" && !clearDrafts(draftTimers)) {
       const status = document.querySelector<HTMLElement>("[data-clear-data-status]");
@@ -145,6 +189,10 @@ export function FormEnhancements() {
     function handleChange(event: Event) {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
+      if (isValidatableField(target) && target.dataset.validationErrorId) {
+        if (target.validity.valid) clearValidationError(target);
+        else showValidationError(target);
+      }
       const form = target.closest<HTMLFormElement>("form[data-draft-key]");
       const key = form?.dataset.draftKey;
       if (!form || !key) return;
@@ -163,6 +211,24 @@ export function FormEnhancements() {
         }
         draftTimers.delete(form);
       }, 200));
+    }
+
+    function handleBlur(event: FocusEvent) {
+      if (!isValidatableField(event.target) || !event.target.willValidate) return;
+      if (event.target.validity.valid) clearValidationError(event.target);
+      else showValidationError(event.target);
+    }
+
+    function handleInvalid(event: Event) {
+      if (isValidatableField(event.target)) showValidationError(event.target);
+    }
+
+    function handleValidationSubmit(event: SubmitEvent) {
+      const form = event.target;
+      if (!(form instanceof HTMLFormElement) || form.checkValidity()) return;
+      event.preventDefault();
+      event.stopPropagation();
+      form.querySelector<HTMLElement>(":invalid")?.focus();
     }
 
     function handleSubmit(event: SubmitEvent) {
@@ -224,11 +290,17 @@ export function FormEnhancements() {
     document.addEventListener("input", handleChange);
     document.addEventListener("change", handleChange);
     document.addEventListener("submit", handleSubmit);
+    document.addEventListener("blur", handleBlur, true);
+    document.addEventListener("invalid", handleInvalid, true);
+    document.addEventListener("submit", handleValidationSubmit, true);
     window.addEventListener("pageshow", resetPendingForms);
     return () => {
       document.removeEventListener("input", handleChange);
       document.removeEventListener("change", handleChange);
       document.removeEventListener("submit", handleSubmit);
+      document.removeEventListener("blur", handleBlur, true);
+      document.removeEventListener("invalid", handleInvalid, true);
+      document.removeEventListener("submit", handleValidationSubmit, true);
       window.removeEventListener("pageshow", resetPendingForms);
       for (const timer of draftTimers.values()) clearTimeout(timer);
     };

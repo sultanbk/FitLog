@@ -2,13 +2,17 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { DatabaseSetupNotice } from "@/components/database-setup-notice";
 import { NaturalLanguageLogger } from "@/components/natural-language-logger";
+import { IndianFoodPicker } from "@/components/indian-food-picker";
 import { MealIdeas } from "@/components/meal-ideas";
-import { FitLogCoach } from "@/components/fitlog-coach";
 import { QuickAddCard } from "@/components/quick-add-card";
+import { WeeklyCheckInCard } from "@/components/weekly-check-in-card";
 import { getDatabaseSetupIssue } from "@/lib/database-setup";
 import { hasGeminiKey } from "@/lib/gemini-api-key";
+import { isValidDay } from "@/lib/progress-analytics";
+import { calculateWeeklyCheckIn, getMonday, type WeeklyCheckIn } from "@/lib/weekly-check-in";
+import { loadWeeklyCheckIn, WeeklyCheckInLoadError } from "@/lib/weekly-check-in-data";
 import { createClient } from "@/lib/supabase/server";
-import { getDemoFoodEntries, getDemoQuickAdds, getDemoState, type FoodEntry, type QuickAdd } from "@/lib/demo-session";
+import { getDemoExerciseLogs, getDemoFoodEntries, getDemoQuickAdds, getDemoState, type FoodEntry, type QuickAdd } from "@/lib/demo-session";
 
 const mealNames = ["breakfast", "lunch", "snack", "dinner"] as const;
 const mealLabels: Record<string, string> = { breakfast: "Breakfast", lunch: "Lunch", snack: "Snack", dinner: "Dinner" };
@@ -27,32 +31,47 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   let profile: { daily_calorie_target: number; maintenance_calories: number | null; current_weight_kg: number; protein_g_per_kg: number } | null = null;
   let entries: FoodEntry[] = [];
   let quickAdds: QuickAdd[] = [];
+  let weeklyCheckIn: WeeklyCheckIn | null = null;
   let geminiEnabled = hasGeminiKey(false, process.env.GEMINI_API_KEY);
   let mealIdeasEnabled = false;
-  let coachConsented = false;
   if (process.env.FITLOG_ENABLE_DEMO === "true") {
-    const [demo, foodEntries, savedQuickAdds] = await Promise.all([
+    const [demo, foodEntries, savedQuickAdds, exerciseLogs] = await Promise.all([
       getDemoState(),
       getDemoFoodEntries(),
       getDemoQuickAdds(),
+      getDemoExerciseLogs(),
     ]);
     if (!demo.active) redirect("/login");
     if (demo.profile) {
       profile = { daily_calorie_target: demo.profile.daily_calorie_target ?? 2000, maintenance_calories: demo.profile.maintenance_calories ?? null, current_weight_kg: demo.profile.current_weight_kg, protein_g_per_kg: demo.profile.protein_g_per_kg ?? 1.5 };
-      coachConsented = demo.profile.gemini_coach_enabled === true;
     }
     mealIdeasEnabled = geminiEnabled;
     entries = foodEntries;
     quickAdds = savedQuickAdds;
+    const loggedDays = [...foodEntries.map((entry) => entry.entry_date), ...exerciseLogs.map((entry) => entry.entry_date)];
+    const firstLoggedDay = loggedDays.filter(isValidDay).sort()[0];
+    weeklyCheckIn = calculateWeeklyCheckIn(today, loggedDays, firstLoggedDay ?? shiftDay(getMonday(today), -56));
   } else {
     const supabase = await createClient(); const { data: { user } } = await supabase.auth.getUser(); if (!user) redirect("/login");
     const keyStatusPromise = geminiEnabled ? Promise.resolve(null) : supabase.rpc("has_my_gemini_key");
-    const [profileResult, foodResult, quickAddsResult, keyStatusResult] = await Promise.all([
-      supabase.from("profiles").select("daily_calorie_target,maintenance_calories,current_weight_kg,protein_g_per_kg,age_years,gemini_coach_enabled").eq("id", user.id).maybeSingle(),
+    const checkInPromise = day === today
+      ? loadWeeklyCheckIn(supabase, user.id, today)
+          .then((data) => ({ data }) as const, (error: unknown) => ({ error }) as const)
+      : Promise.resolve({ data: null } as const);
+    const [profileResult, foodResult, quickAddsResult, keyStatusResult, checkInResult] = await Promise.all([
+      supabase.from("profiles").select("daily_calorie_target,maintenance_calories,current_weight_kg,protein_g_per_kg,age_years").eq("id", user.id).maybeSingle(),
       supabase.from("food_entries").select("id,entry_date,name,meal,calories,protein_g,carbs_g,fat_g,is_guessed,created_at").eq("user_id", user.id).eq("entry_date", day).order("created_at", { ascending: false }),
       supabase.from("quick_adds").select("id,name,meal,calories,protein_g,carbs_g,fat_g,is_guessed,created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(20),
       keyStatusPromise,
+      checkInPromise,
     ]);
+    if ("error" in checkInResult) {
+      if (!(checkInResult.error instanceof WeeklyCheckInLoadError)) throw checkInResult.error;
+      const setupIssue = getDatabaseSetupIssue(checkInResult.error.databaseError);
+      if (setupIssue) return <DatabaseSetupNotice active="today" issue={setupIssue} />;
+      throw checkInResult.error;
+    }
+    weeklyCheckIn = checkInResult.data;
     if (keyStatusResult?.error) {
       const setupIssue = getDatabaseSetupIssue(keyStatusResult.error);
       if (setupIssue) return <DatabaseSetupNotice active="today" issue={setupIssue} />;
@@ -68,7 +87,6 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
     }
     if (data?.age_years != null) {
       profile = { daily_calorie_target: data.daily_calorie_target, maintenance_calories: data.maintenance_calories, current_weight_kg: Number(data.current_weight_kg), protein_g_per_kg: Number(data.protein_g_per_kg ?? 1.5) };
-      coachConsented = data.gemini_coach_enabled === true;
     }
     const { data: rows, error: foodError } = foodResult;
     if (foodError) {
@@ -125,12 +143,14 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
       {quickAdds.length > 0 && <a href="#saved-favorites" className="inline-flex min-h-11 items-center justify-center rounded-lg border border-[#d9d7cd] bg-[#fffefa] px-4 py-2.5 text-sm font-semibold text-[#3e5944] transition-colors hover:bg-[#eeeee5]">Use a saved favorite</a>}
     </nav>
 
+    {day === today && weeklyCheckIn && <WeeklyCheckInCard progress={weeklyCheckIn} />}
+
     <section id="food-journal" className="fit-card mt-6 scroll-mt-5">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="fit-eyebrow">Food journal</p>
           <h2 className="mt-2 text-2xl">Log what you ate</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#7b8077]">Describe a meal for an editable nutrition estimate, or choose a saved favorite below. You can also enter nutrition manually.</p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#7b8077]">Describe a meal for an editable nutrition estimate, choose a saved favorite, or search measured Indian food ingredients for a quick manual log.</p>
         </div>
       </div>
       <NaturalLanguageLogger day={day} enabled={geminiEnabled} />
@@ -143,22 +163,16 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
         </section>
       )}
       <details className="mt-5 border-t border-[#efede7] pt-4">
-        <summary className="cursor-pointer text-sm font-semibold text-[#3e5944]">Enter nutrition manually</summary>
+        <summary className="cursor-pointer text-sm font-semibold text-[#3e5944]">Search food catalog or enter nutrition manually</summary>
         <p data-draft-status className="mt-3 text-xs text-[#7b8077]">Unfinished details are saved only in this browser tab.</p>
-        <form action="/api/food-entries" method="post" data-draft-key={`manual-food:${day}`} className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <input type="hidden" name="entry_date" value={day} />
-          <label className="col-span-2 text-xs font-medium text-[#62685f] sm:col-span-3">Food name
-            <input required maxLength={100} name="name" autoComplete="off" placeholder="e.g. Oats with milk" className="fit-input mt-1.5" />
-          </label>
-          <label className="text-xs font-medium text-[#62685f]">Meal
-            <select name="meal" className="fit-input mt-1.5">{mealNames.map((meal) => <option key={meal} value={meal}>{mealLabels[meal]}</option>)}</select>
-          </label>
-          <FoodNumber label="Calories (kcal)" name="calories" integer />
-          <FoodNumber label="Protein (g)" name="protein_g" />
-          <FoodNumber label="Carbs (g)" name="carbs_g" />
-          <FoodNumber label="Fat (g)" name="fat_g" />
-          <button data-pending-label="Adding…" className="fit-button-primary min-h-12 col-span-2 mt-1 sm:col-span-4">Add food</button>
-        </form>
+          <form action="/api/food-entries" method="post" data-draft-key={`manual-food:${day}`} className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <input type="hidden" name="entry_date" value={day} />
+            <IndianFoodPicker />
+            <label className="text-xs font-medium text-[#62685f]">Meal
+              <select name="meal" className="fit-input mt-1.5">{mealNames.map((meal) => <option key={meal} value={meal}>{mealLabels[meal]}</option>)}</select>
+            </label>
+            <button data-pending-label="Adding…" className="fit-button-primary min-h-12 col-span-2 mt-1 sm:col-span-4">Add food</button>
+          </form>
       </details>
     </section>
     <section className="mt-7" aria-labelledby="food-entries-title">
@@ -229,7 +243,6 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
         ) : null;
       })}
     </section>
-    {day === today && <FitLogCoach consented={coachConsented} available={geminiEnabled} />}
     {day === today && <MealIdeas enabled={mealIdeasEnabled} />}
     <p className="mt-7 text-center text-xs text-[#81877e]">Calorie and protein targets are estimates, not medical advice.</p>
   </AppShell>;

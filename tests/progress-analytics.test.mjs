@@ -46,7 +46,7 @@ test("weight log dates are interpreted in the app timezone", () => {
 
 test("daily analytics preserve empty days and sum logged records", () => {
   const buckets = buildAnalyticsBuckets("week", "2026-11-10", [
-    { entry_date: "2026-11-04", calories: 1200, protein_g: 55 },
+    { entry_date: "2026-11-04", calories: 1200, protein_g: 55, is_guessed: true },
     { entry_date: "2026-11-04", calories: 500, protein_g: 20 },
   ], [
     { entry_date: "2026-11-10", repetitions: 9 },
@@ -55,13 +55,15 @@ test("daily analytics preserve empty days and sum logged records", () => {
   assert.equal(buckets[0].key, "2026-11-04");
   assert.equal(buckets[0].calories, 1700);
   assert.equal(buckets[0].foodDays, 1);
+  assert.equal(buckets[0].foodEntries, 2);
+  assert.equal(buckets[0].guessedFoodEntries, 1);
   assert.equal(buckets[1].foodDays, 0);
   assert.equal(buckets[6].pushUps, 9);
 });
 
 test("year analytics aggregate daily logs into months and preserve missing weight periods", () => {
   const buckets = buildAnalyticsBuckets("year", "2026-11-10", [
-    { entry_date: "2026-01-03", calories: 1800, protein_g: 70 },
+    { entry_date: "2026-01-03", calories: 1800, protein_g: 70, is_guessed: true },
     { entry_date: "2026-01-03", calories: 400, protein_g: 15 },
     { entry_date: "2026-03-10", calories: 2100, protein_g: 90 },
   ], [
@@ -75,8 +77,8 @@ test("year analytics aggregate daily logs into months and preserve missing weigh
   const january = buckets.find((bucket) => bucket.key === "2026-01");
   assert.ok(january);
   assert.deepEqual(
-    { calories: january.calories, protein: january.protein, foodDays: january.foodDays, pushUps: january.pushUps, exerciseDays: january.exerciseDays, averageWeight: january.averageWeight, weighInCount: january.weighInCount },
-    { calories: 2200, protein: 85, foodDays: 1, pushUps: 12, exerciseDays: 1, averageWeight: 71, weighInCount: 2 },
+    { calories: january.calories, protein: january.protein, foodDays: january.foodDays, foodEntries: january.foodEntries, guessedFoodEntries: january.guessedFoodEntries, pushUps: january.pushUps, exerciseDays: january.exerciseDays, averageWeight: january.averageWeight, weighInCount: january.weighInCount },
+    { calories: 2200, protein: 85, foodDays: 1, foodEntries: 2, guessedFoodEntries: 1, pushUps: 12, exerciseDays: 1, averageWeight: 71, weighInCount: 2 },
   );
   assert.equal(buckets.find((bucket) => bucket.key === "2026-02")?.averageWeight, null);
   assert.equal(buckets.find((bucket) => bucket.key === "2026-03")?.calories, 2100);

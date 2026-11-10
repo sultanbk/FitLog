@@ -195,6 +195,8 @@ button, a, summary { -webkit-tap-highlight-color: transparent; }
 }
 .fit-input:focus { border-color: var(--fit-sage-bright); outline: none; box-shadow: 0 0 0 3px rgb(87 131 77 / 14%); }
 .fit-input:user-invalid, input:user-invalid, select:user-invalid, textarea:user-invalid { border-color: var(--fit-danger); box-shadow: 0 0 0 3px rgb(161 65 54 / 10%); }
+.fit-input[aria-invalid="true"], input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--fit-danger); box-shadow: 0 0 0 3px rgb(161 65 54 / 10%); }
+.fit-field-error { margin-top: .35rem; color: var(--fit-danger); font-size: .78rem; line-height: 1.4; }
 .fit-button-primary {
   min-height: 2.9rem;
   border: 0;
